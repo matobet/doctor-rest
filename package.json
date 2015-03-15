@@ -1,0 +1,35 @@
+{
+  "name": "doctor-rest",
+  "version": "0.0.1",
+  "description": "Generic proxy for REST-ful APIs with advanced query language and MQTT push.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node --harmony_classes --harmony_arrow_functions index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "REST",
+    "MQTT",
+    "Push",
+    "Proxy"
+  ],
+  "author": "Martin Betak <matobet@gmail.com>",
+  "license": "Apache 2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/matobet/doctor"
+  },
+  "dependencies": {
+    "co": "^4.4.0",
+    "koa": "^0.18.1",
+    "koa-bodyparser": "^1.4.1",
+    "koa-logger": "^1.2.2",
+    "koa-route": "^2.4.0",
+    "mongodb": "^1.4.34",
+    "monk": "^1.0.0",
+    "mosca": "^0.28.1"
+  },
+  "engines": {
+    "iojs": "1.x"
+  }
+}

@@ -45,11 +45,33 @@ var manager = {
     if ('id' in data && data.id !== id) {
       throw error(400, "Document id cannot be patched.");
     }
-    return db.get(name).update({id}, { $set: data });
+    return co(function *() {
+      let existing = yield manager.getOne(name, id);
+      if (!existing) {
+        throw error(404, "Cannot patch non-existing document.");
+      }
+      return db.get(name).update({id}, {$set: data});
+    });
   },
 
   replaceCollection(name, entities) {
-
+    if (!Array.isArray(entities)) {
+      throw error(400, "Request must contain an array.")
+    }
+    if (entities === []) {
+      return manager.removeCollection(name);
+    }
+    entities.map(checkId);
+    return co(function *() {
+      let existing = yield manager.getCollection(name);
+      let created = true;
+      if (existing.length !== 0) {
+        yield db.clear(name);
+        created = false;
+      }
+      yield db.get(name).insert(entities);
+      return created;
+    });
   },
 
   replace(name, id, entity) {
@@ -57,7 +79,15 @@ var manager = {
     if (id !== entity.id) {
       throw error(400, "Document id must match last segment of document URL.");
     }
-    return db.get(name).update({id}, entity);
+    return co(function *() {
+      let existing = yield manager.getOne(name, id);
+      if (!existing) {
+        yield manager.create(name, entity);
+        return true;
+      }
+      yield db.get(name).update({id}, entity);
+      return false;
+    });
   },
 
   removeCollection(name) {
@@ -65,7 +95,13 @@ var manager = {
   },
 
   remove(name, id) {
-    return db.get(name).remove({id});
+    return co(function *() {
+      let existing = yield manager.getOne(name, id);
+      if (!existing) {
+        throw error(404, 'Cannot delete non-existing document.');
+      }
+      return db.get(name).remove({id});
+    });
   }
 };
 
@@ -83,14 +119,14 @@ exports.get = function *get(name, id) {
 
 
 exports.replace = function *replace(name, id) {
-  this.body = yield manager.replace(name, id, this.request.body);
-  this.status = 200;
+  let created = yield manager.replace(name, id, this.request.body);
+  this.status = created ? 201 : 200;
 };
 
 
 exports.replaceCollection = function *replaceCollection(name) {
-  yield manager.replaceCollection(name, this.request.body);
-  this.status = 200;
+  let created = yield manager.replaceCollection(name, this.request.body);
+  this.status = created ? 201 : 200;
 };
 
 
@@ -101,7 +137,6 @@ exports.update = function *update(name, id) {
 
 
 exports.create = function *create(name) {
-  console.log(this.request.body);
   yield manager.create(name, this.request.body);
   this.status = 201;
 };

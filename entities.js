@@ -1,7 +1,7 @@
 'use strict';
 
-var db = require('monk')('localhost/doctor')
-  , co = require('co')
+var co = require('co')
+  , db = require('./db')
   , mqtt = require('./mqtt')
   ;
 
@@ -17,6 +17,8 @@ function checkId(entity) {
     throw error(400, "Document needs to contain the 'id' attribute.");
   }
 }
+
+const NO_MONGO_ID = {fields: {_id: 0}};
 
 var manager = {
   getCollection(name) {
@@ -41,7 +43,7 @@ var manager = {
 
   patch(name, id, data) {
     if ('id' in data && data.id !== id) {
-      throw error(400, "Documend id cannot be patched.");
+      throw error(400, "Document id cannot be patched.");
     }
     return db.get(name).update({id}, { $set: data });
   },
@@ -59,15 +61,13 @@ var manager = {
   },
 
   removeCollection(name) {
-    return db.get(name).drop();
+    return db.clear(name);
   },
 
   remove(name, id) {
     return db.get(name).remove({id});
   }
 };
-
-const NO_MONGO_ID = {fields: {_id: 0}};
 
 exports.getCollection = function *getCollection(name) {
   this.body = yield manager.getCollection(name);

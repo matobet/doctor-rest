@@ -1,15 +1,17 @@
 'use strict';
 
-var mosca = require('mosca');
+var mosca = require('mosca')
+  , config = require('./config')
+  ;
 
 var server;
 
 exports.init = function init(ready) {
   server = new mosca.Server({
-    port: 1883,
+    port: config.MQTT_PORT,
     backend: {
       type: 'mongo',
-      url: 'mongodb://localhost/mqtt',
+      url: `mongodb://${config.MONGO_HOST}/${config.MONGO_MQTT_DB}`,
       pubsubCollection: 'ascoltatori',
       mongo: {}
     }

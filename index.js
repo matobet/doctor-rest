@@ -5,11 +5,12 @@ var koa = require('koa')
   , route = require('koa-route')
   , bodyParser = require('koa-bodyparser')
 
+  , config = require('./config')
   , entities = require('./entities')
   , mqtt = require('./mqtt')
   ;
 
-var app = koa();
+const app = module.exports = koa();
 
 app.use(logger());
 app.use(bodyParser());
@@ -24,11 +25,13 @@ app.use(route.put('/entities/:name/:id', entities.replace));
 app.use(route.patch('/entities/:name/:id', entities.update));
 app.use(route.delete('/entities/:name/:id', entities.remove));
 
-app.listen(3000, () => {
-  console.log("* DOCumenT ORiented REST Api started ...");
+console.dir(config);
+
+app.listen(config.API_PORT, () => {
+  console.log(`* DOCumenT ORiented REST Api started on port ${config.API_PORT} ...`);
 });
 
 mqtt.init(() => {
-  console.log("* MQTT Broker listening on port 1883 ...");
+  console.log(`* MQTT Broker listening on port ${config.MQTT_PORT} ...`);
   mqtt.publish({ topic: 'foo', payload: "foooooo"});
 });

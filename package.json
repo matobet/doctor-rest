@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node --harmony_classes --harmony_arrow_functions index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "MONGO_MAIN_DB=doctor_test PORT_OFFSET=1 node --harmony_classes --harmony_arrow_functions ./node_modules/mocha/bin/_mocha --require co-mocha"
   },
   "keywords": [
     "REST",
@@ -31,5 +31,12 @@
   },
   "engines": {
     "iojs": "1.x"
+  },
+  "devDependencies": {
+    "chai": "^2.1.1",
+    "co-mocha": "^1.1.0",
+    "co-supertest": "0.0.8",
+    "mocha": "^2.2.1",
+    "supertest": "^0.15.0"
   }
 }

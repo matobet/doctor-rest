@@ -2,8 +2,8 @@
 
 var expect = require('chai').expect
   , _ = require('lodash')
-  , app = require('../')
-  , db = require('../db')
+  , app = require('../lib/')
+  , db = require('../lib/db')
   , request = require('co-supertest').agent(app.listen())
   ;
 

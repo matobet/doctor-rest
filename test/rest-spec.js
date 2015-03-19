@@ -2,30 +2,15 @@
 
 var expect = require('chai').expect
   , _ = require('lodash')
-  , app = require('../lib/')
   , db = require('../lib/db')
-  , request = require('co-supertest').agent(app.listen())
+
+  , rest = require('./utils/rest')
+  , get = rest.get
+  , post = rest.post
+  , patch = rest.patch
+  , put = rest.put
+  , remove = rest.remove
   ;
-
-function get(url, status) {
-  return request.get(url).expect(status || 200).type('json').end();
-}
-
-function create(url, payload, status) {
-  return request.post(url).send(payload).expect(status || 201).end();
-}
-
-function patch(url, payload, status) {
-  return request.patch(url).send(payload).expect(status || 200).end();
-}
-
-function put(url, payload, status) {
-  return request.put(url).send(payload).expect(status || 200).end();
-}
-
-function remove(url, status) {
-  return request.delete(url).expect(status || 204).end();
-}
 
 // clear used db collections
 beforeEach(function *() {
@@ -51,7 +36,7 @@ describe('Entity Collections', () => {
     });
 
     it('should return previously created entity', function *() {
-      yield create('/entities/vm', PAYLOAD);
+      yield post('/entities/vm', PAYLOAD);
 
       let res = yield get('/entities/vm/very_unique');
       expect(res.body).to.eql(PAYLOAD);
@@ -68,7 +53,7 @@ describe('Entity Collections', () => {
           name: "name_" + i
         };
         documents.push(doc);
-        yield create('/entities/vm', doc);
+        yield post('/entities/vm', doc);
       }
       let res = yield get('/entities/vm');
       expect(res.body).to.eql(documents);
@@ -83,7 +68,7 @@ describe('Entity Collections', () => {
     });
 
     it('should be able to patch single property', function *() {
-      yield create('/entities/vm', PAYLOAD);
+      yield post('/entities/vm', PAYLOAD);
       yield patch('/entities/vm/very_unique', {name: 'New name'});
 
       let res = yield get('/entities/vm/very_unique');
@@ -98,7 +83,7 @@ describe('Entity Collections', () => {
     };
 
     it('should be able to patch multiple properties', function *() {
-      yield create('/entities/vm', PAYLOAD2);
+      yield post('/entities/vm', PAYLOAD2);
       yield patch('/entities/vm/big', {name: 'Even Bigger VM', status: 'sadly DOWN'});
 
       let res = yield get('/entities/vm/big');
@@ -108,7 +93,7 @@ describe('Entity Collections', () => {
     });
 
     it('should return 400 when trying to patch document id', function *() {
-      yield create('/entities/vm', PAYLOAD2);
+      yield post('/entities/vm', PAYLOAD2);
       yield patch('/entities/vm/big', {id: "new_id", name: "whatever"}, 400);
     });
 
@@ -123,7 +108,7 @@ describe('Entity Collections', () => {
     });
 
     it('should replace entire document', function *() {
-      yield create('/entities/vm', PAYLOAD);
+      yield post('/entities/vm', PAYLOAD);
       yield put('/entities/vm/very_unique', {id: 'very_unique', status: 'image_locked'});
 
       let res = yield get('/entities/vm/very_unique');
@@ -133,7 +118,7 @@ describe('Entity Collections', () => {
     });
 
     it('should return 400 on attempt to replace document with different id', function *() {
-      yield create('/entities/vm', PAYLOAD);
+      yield post('/entities/vm', PAYLOAD);
       yield put('/entities/vm/very_unique', {id: 'not_very_unique'}, 400);
     });
 
@@ -167,7 +152,7 @@ describe('Entity Collections', () => {
     });
 
     it('should delete existing document', function *() {
-      yield create('/entities/vm', PAYLOAD);
+      yield post('/entities/vm', PAYLOAD);
       yield remove('/entities/vm/very_unique');
     });
 

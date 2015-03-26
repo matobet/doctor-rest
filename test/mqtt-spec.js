@@ -25,30 +25,30 @@ describe("MQTT push notification", function () {
 
   it('should be sent on entity creation', function *() {
     push.expect('vm/push_message_342', '+');
-    yield post('/entities/vm', payload);
+    yield post({url: '/entities/vm', payload});
     yield push.wait();
   });
 
   it('should be sent on entity update with changed fields', function *() {
     push.expect('vm/push_message_12', '+');
-    yield post('/entities/vm', payload2);
+    yield post({url: '/entities/vm', payload: payload2});
     push.expect('vm/push_message_12', 'data');
-    yield put('/entities/vm/push_message_12', {id: payload2.id, data: "Some other content"});
+    yield put({url: '/entities/vm/push_message_12', payload: {id: payload2.id, data: "Some other content"}});
     yield push.wait();
   });
 
   it('should not be sent when nothing changes', function *() {
     push.expect('vm/push_message_342', '+');
-    yield post('/entities/vm', payload);
-    yield put('/entities/vm/push_message_342', payload);
+    yield post({url: '/entities/vm', payload});
+    yield put({url: '/entities/vm/push_message_342', payload});
     yield push.wait();
   });
 
   it('should equal properties in patch update', function *() {
     push.expect('vm/push_message_342', '+');
-    yield post('/entities/vm', payload);
+    yield post({url: '/entities/vm', payload});
     push.expect('vm/push_message_342', 'data,new_field');
-    yield patch('/entities/vm/push_message_342', {data: "new data", new_field: 'surprise'});
+    yield patch({url: '/entities/vm/push_message_342', payload: {data: "new data", new_field: 'surprise'}});
     yield push.wait();
   });
 
@@ -62,7 +62,7 @@ describe("MQTT push notification", function () {
 
     for (let vm of vms) {
       push.expect('vm/' + vm.id, '+');
-      yield post('/entities/vm', vm);
+      yield post({url: '/entities/vm', payload: vm});
     }
 
     return vms;
@@ -77,7 +77,7 @@ describe("MQTT push notification", function () {
     for (let vm of vms) {
       push.expect('vm/' + vm.id, 'status');
     }
-    yield put('/entities/vm', vms);
+    yield put({url: '/entities/vm', payload: vms});
     yield push.wait();
   });
 
@@ -95,14 +95,14 @@ describe("MQTT push notification", function () {
     vms[1].name = 'something';
     vms.push({id: 'id_6'});
 
-    yield put('/entities/vm', vms);
+    yield put({url: '/entities/vm', payload: vms});
 
     yield push.wait();
   });
 
   it('should be sent for single removed entity', function *() {
     push.expect('vm/push_message_342', '+');
-    yield post('/entities/vm', payload);
+    yield post({url: '/entities/vm', payload});
     push.expect('vm/push_message_342', '-');
     yield remove('/entities/vm/push_message_342');
 
@@ -123,9 +123,9 @@ describe("MQTT push notification", function () {
 
     it('should be sent on link change', function *() {
       push.expect('vm/push_message_342', '+');
-      yield post('/entities/vm', payload);
+      yield post({url: '/entities/vm', payload});
       push.expect('vm/push_message_342', '@cluster');
-      yield patch('/entities/vm/push_message_342', {_links: {cluster: 42}});
+      yield patch({url: '/entities/vm/push_message_342', payload: {_links: {cluster: 42}}});
       yield push.wait();
     });
   });

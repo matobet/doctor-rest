@@ -19,7 +19,7 @@ beforeEach(function *() {
 
 describe('Entity Collections', () => {
 
-  const PAYLOAD = {
+  const payload = {
     name: 'My VM',
     id: 'very_unique'
   };
@@ -27,22 +27,22 @@ describe('Entity Collections', () => {
   describe('GET', () => {
 
     it('should return empty result for non-existing collection', function *() {
-      let res = yield get('/entities/vm');
+      let res = yield get({url: '/entities/vm'});
       expect(res.body).to.eql([]);
     });
 
     it('should return 404 for non-existing entity', function *() {
-      yield get('/entities/vm/non_existing_id', 404);
+      yield get({url: '/entities/vm/non_existing_id', status: 404});
     });
 
     it('should return previously created entity', function *() {
-      yield post('/entities/vm', PAYLOAD);
+      yield post({url: '/entities/vm', payload});
 
-      let res = yield get('/entities/vm/very_unique');
-      expect(res.body).to.eql(PAYLOAD);
+      let res = yield get({url: '/entities/vm/very_unique'});
+      expect(res.body).to.eql(payload);
 
-      res = yield get('/entities/vm');
-      expect(res.body).to.eql([PAYLOAD]);
+      res = yield get({url: '/entities/vm'});
+      expect(res.body).to.eql([payload]);
     });
 
     it('should return all documents from existing collection', function *() {
@@ -53,9 +53,9 @@ describe('Entity Collections', () => {
           name: "name_" + i
         };
         documents.push(doc);
-        yield post('/entities/vm', doc);
+        yield post({url: '/entities/vm', payload: doc});
       }
-      let res = yield get('/entities/vm');
+      let res = yield get({url: '/entities/vm'});
       expect(res.body).to.eql(documents);
     });
 
@@ -64,14 +64,14 @@ describe('Entity Collections', () => {
   describe('PATCH', () => {
 
     it('should fail on non-existing document', function *() {
-      yield patch('/entities/vm/blurp', {name: 'not very useful'}, 404);
+      yield patch({url: '/entities/vm/blurp', payload: {name: 'not very useful'}, status: 404});
     });
 
     it('should be able to patch single property', function *() {
-      yield post('/entities/vm', PAYLOAD);
-      yield patch('/entities/vm/very_unique', {name: 'New name'});
+      yield post({url: '/entities/vm', payload});
+      yield patch({url: '/entities/vm/very_unique', payload: {name: 'New name'}});
 
-      let res = yield get('/entities/vm/very_unique');
+      let res = yield get({url: '/entities/vm/very_unique'});
       expect(res.body.id).to.equal('very_unique');
       expect(res.body.name).to.equal('New name');
     });
@@ -83,18 +83,18 @@ describe('Entity Collections', () => {
     };
 
     it('should be able to patch multiple properties', function *() {
-      yield post('/entities/vm', PAYLOAD2);
-      yield patch('/entities/vm/big', {name: 'Even Bigger VM', status: 'sadly DOWN'});
+      yield post({url: '/entities/vm', payload: PAYLOAD2});
+      yield patch({url: '/entities/vm/big', payload: {name: 'Even Bigger VM', status: 'sadly DOWN'}});
 
-      let res = yield get('/entities/vm/big');
+      let res = yield get({url: '/entities/vm/big'});
       expect(res.body.id).to.equal('big');
       expect(res.body.name).to.equal('Even Bigger VM');
       expect(res.body.status).to.equal('sadly DOWN');
     });
 
     it('should return 400 when trying to patch document id', function *() {
-      yield post('/entities/vm', PAYLOAD2);
-      yield patch('/entities/vm/big', {id: "new_id", name: "whatever"}, 400);
+      yield post({url: '/entities/vm', payload: PAYLOAD2});
+      yield patch({url: '/entities/vm/big', payload: {id: "new_id", name: "whatever"}, status: 400});
     });
 
   });
@@ -102,46 +102,46 @@ describe('Entity Collections', () => {
   describe('PUT', () => {
 
     it('should create document if doesn\'n exist', function *() {
-      yield put('/entities/vm/very_unique', PAYLOAD, 201);
-      let res = yield get('/entities/vm/very_unique');
-      expect(res.body).to.eql(PAYLOAD);
+      yield put({url: '/entities/vm/very_unique', payload, status: 201});
+      let res = yield get({url: '/entities/vm/very_unique'});
+      expect(res.body).to.eql(payload);
     });
 
     it('should replace entire document', function *() {
-      yield post('/entities/vm', PAYLOAD);
-      yield put('/entities/vm/very_unique', {id: 'very_unique', status: 'image_locked'});
+      yield post({url: '/entities/vm', payload});
+      yield put({url: '/entities/vm/very_unique', payload: {id: 'very_unique', status: 'image_locked'}});
 
-      let res = yield get('/entities/vm/very_unique');
+      let res = yield get({url: '/entities/vm/very_unique'});
       expect(res.body.id).to.equal('very_unique');
       expect(res.body.name).to.not.exist;
       expect(res.body.status).to.equal('image_locked');
     });
 
     it('should return 400 on attempt to replace document with different id', function *() {
-      yield post('/entities/vm', PAYLOAD);
-      yield put('/entities/vm/very_unique', {id: 'not_very_unique'}, 400);
+      yield post({url: '/entities/vm', payload});
+      yield put({url: '/entities/vm/very_unique', payload: {id: 'not_very_unique'}, status: 400});
     });
 
     it('should create entire collection', function *() {
       const documents = _.times(5, i => {
         return {'id': "id_" + i, name: "name_" + i};
       });
-      yield put('/entities/vm', documents, 201);
-      let res = yield get('/entities/vm');
+      yield put({url: '/entities/vm', payload: documents, status: 201});
+      let res = yield get({url: '/entities/vm'});
       expect(res.body).to.eql(documents);
     });
 
     it('should validate id presence on collection replace', function *() {
       const documents = [{name: "not enough"}];
-      yield put('/entities/vm', documents, 400);
+      yield put({url: '/entities/vm', payload: documents, status: 400});
     });
 
     it('should return 200 on replace existing collection', function *() {
       const documents = _.times(5, i => {
         return {'id': "id_" + i, name: "name_" + i};
       });
-      yield put('/entities/vm', documents, 201);
-      yield put('/entities/vm', documents);
+      yield put({url: '/entities/vm', payload: documents, status: 201});
+      yield put({url: '/entities/vm', payload: documents});
     });
   });
 
@@ -152,7 +152,7 @@ describe('Entity Collections', () => {
     });
 
     it('should delete existing document', function *() {
-      yield post('/entities/vm', PAYLOAD);
+      yield post({url: '/entities/vm', payload});
       yield remove('/entities/vm/very_unique');
     });
 

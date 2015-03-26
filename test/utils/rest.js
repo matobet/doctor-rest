@@ -4,20 +4,32 @@ var app = require('../../lib/index')
   , request = require('co-supertest').agent(app.listen())
   ;
 
-function get(url, status) {
-  return request.get(url).expect(status || 200).type('json').end();
+function get(options) {
+  let url = options.url;
+  let status = options.status || 200;
+  let payload = options.payload;
+  return request.get(url).send(payload).expect(status).type('json').end();
 }
 
-function post(url, payload, status) {
-  return request.post(url).send(payload).expect(status || 201).end();
+function post(options) {
+  let url = options.url;
+  let status = options.status || 201;
+  let payload = options.payload;
+  return request.post(url).send(payload).expect(status).end();
 }
 
-function patch(url, payload, status) {
-  return request.patch(url).send(payload).expect(status || 200).end();
+function patch(options) {
+  let url = options.url;
+  let status = options.status || 200;
+  let payload = options.payload;
+  return request.patch(url).send(payload).expect(status).end();
 }
 
-function put(url, payload, status) {
-  return request.put(url).send(payload).expect(status || 200).end();
+function put(options) {
+  let url = options.url;
+  let status = options.status || 200;
+  let payload = options.payload;
+  return request.put(url).send(payload).expect(status).end();
 }
 
 function remove(url, status) {

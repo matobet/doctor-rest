@@ -45,6 +45,14 @@ describe('Entity Collections', () => {
       expect(res.body).to.eql([payload]);
     });
 
+    it('should return entity created using integer id', function *() {
+      let vm = {id: 123};
+      yield post({url: '/entities/vm', payload: vm});
+
+      let res = yield get({url: '/entities/vm/123'});
+      expect(res.body).to.eql({id: '123'});
+    });
+
     it('should return all documents from existing collection', function *() {
       const documents = [];
       for (let i = 0; i < 5; i++) {

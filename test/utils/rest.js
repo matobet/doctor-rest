@@ -38,8 +38,8 @@ function remove(url, status) {
 
 module.exports = {
   get: get,
-  post: post,
-  patch: patch,
-  put: put,
-  remove: remove
+  post,
+  patch,
+  put,
+  remove
 };

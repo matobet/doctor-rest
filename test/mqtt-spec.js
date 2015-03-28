@@ -1,6 +1,7 @@
 'use strict';
 
 var expect = require('chai').expect
+  , db  = require('../lib/db')
   , rest = require('./utils/rest')
   , push = require('./utils/push')
   , post = rest.post
@@ -12,6 +13,10 @@ var expect = require('chai').expect
 describe("MQTT push notification", function () {
 
   push.setup();
+
+  beforeEach(function *() {
+    yield db.clear('vm');
+  });
 
   const payload = {
     id: "push_message_342",

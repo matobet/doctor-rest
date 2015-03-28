@@ -12,12 +12,12 @@ var expect = require('chai').expect
   , remove = rest.remove
   ;
 
-// clear used db collections
-beforeEach(function *() {
-  yield db.clear('vm');
-});
-
 describe('Entity Collections', () => {
+
+  // clear used db collections
+  beforeEach(function *() {
+    yield db.clear('vm');
+  });
 
   const payload = {
     name: 'My VM',

@@ -29,7 +29,7 @@
     "koa-bodyparser": "^1.4.1",
     "koa-logger": "^1.2.2",
     "koa-route": "^2.4.0",
-    "lodash": "^3.5.0",
+    "lodash": "^3.6.0",
     "mongodb": "^1.4.35",
     "monk": "^1.0.0",
     "mosca": "^0.28.1"

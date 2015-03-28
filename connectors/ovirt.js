@@ -73,7 +73,7 @@ function processEntity(data) {
   return result;
 }
 
-const COLLECTIONS = ['vm', 'cluster', 'data_center', 'host', 'user', 'domain', 'permission', 'role'];
+const COLLECTIONS = ['vm', 'cluster', 'template', 'data_center', 'host', 'user', 'domain', 'permission', 'role'];
 
 const API_ALIASES = {
   data_center: 'datacenter'

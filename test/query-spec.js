@@ -129,4 +129,45 @@ describe('Query Language', () => {
       expect(res.body[i]['@cluster'].name).to.equal(clusters[i].name);
     }
   });
+
+  it('should support query string for selection', function *() {
+    const vms = [{
+      id: 123,
+      name: 'my_vm',
+      status: 'up',
+      _links: {cluster: 456}
+    }, {
+      id: 124,
+      name: 'my_vm2',
+      status: 'down',
+      _links: {cluster: 457}
+    }];
+
+    const clusters = [{
+      id: 456,
+      name: 'my_cluster'
+    }, {
+      id: 457,
+      name: 'my_other_cluster'
+    }];
+
+    yield put({url: '/entities/vm', payload: vms, status: 201});
+    yield put({url: '/entities/cluster', payload: clusters, status: 201});
+
+    let query = {select: ['name', 'status', '@cluster']};
+    let res = yield get({url: `/entities/vm?q=${JSON.stringify(query)}`});
+
+    expect(res.body).to.have.length(2);
+    for (let i = 0; i < 2; i++) {
+      expect(res.body[i].name).to.equal(vms[i].name);
+      expect(res.body[i].status).to.equal(vms[i].status);
+      expect(res.body[i]['@cluster']).to.be.an('object');
+      expect(res.body[i]['@cluster'].id).to.equal(clusters[i].id.toString());
+      expect(res.body[i]['@cluster'].name).to.equal(clusters[i].name);
+    }
+  });
+
+  it('should return 400 on bad query', function *() {
+    yield get({url: '/entities/vm?q=Not entirely: JSON', status: 400});
+  });
 });

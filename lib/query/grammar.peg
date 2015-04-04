@@ -1,0 +1,33 @@
+{
+  function withSelect(obj, s) {
+    if (s) {
+      obj.select = s;
+    }
+    return obj;
+  }
+}
+
+start = selector
+
+selector
+  = field
+  / ref
+  / array_ref
+
+project
+  = "(" fs:selectors ")" { return fs; }
+  / "." s:selector { return s; }
+
+ref
+  = "@" f:field p:project? { return withSelect({ ref: f }, p); }
+
+array_ref
+  = "@[" f:field "]" p:project? { return withSelect({ many_ref: f }, p); }
+
+selectors = first:selector rest:("," space* f:selector { return f; })* { return rest.unshift(first), rest; }
+
+field = chars:letter+ { return chars.join(''); }
+
+letter = [a-zA-Z0-9_]
+
+space = " "

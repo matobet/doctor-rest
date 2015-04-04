@@ -170,4 +170,28 @@ describe('Query Language', () => {
   it('should return 400 on bad query', function *() {
     yield get({url: '/entities/vm?q=Not entirely: JSON', status: 400});
   });
+
+  it('should be able to resolve nested references', !function *() {
+    yield post({url: '/entities/vm', payload: {
+      id: 1,
+      name: 'my vm',
+      _links: {
+        cluster: 2
+      }
+    }});
+    yield post({url: '/entities/cluster', payload: {
+      id: 2,
+      name: 'my cluster',
+      _links: {
+        data_center: 3
+      }
+    }});
+    yield post({url: '/entities/data_center', payload: {
+      id: 3,
+      name: 'my data center'
+    }});
+
+    let res = yield get({url: '/entities/vm/1', payload: {select: ['@cluster.@data_center.name']}});
+    expect(res.body['@cluster.data_center.name']).to.equal('my data center');
+  });
 });

@@ -24,7 +24,8 @@ ref
 array_ref
   = "@[" f:field "]" p:project? { return withSelect({ many_ref: f }, p); }
 
-selectors = first:selector rest:("," space* f:selector { return f; })* { return rest.unshift(first), rest; }
+selectors
+ = first:selector rest:("," space* f:selector { return f; })* { return rest.unshift(first), rest; }
 
 field = chars:letter+ { return chars.join(''); }
 

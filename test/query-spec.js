@@ -13,7 +13,7 @@ var expect = require('chai').expect
 describe('Query Language', () => {
 
   beforeEach(function *() {
-    yield db.clear('vm', 'cluster');
+    yield db.clear('vm', 'cluster', 'data_center', 'system');
   });
 
   it('should enable to query selected fields', function *() {
@@ -171,7 +171,7 @@ describe('Query Language', () => {
     yield get({url: '/entities/vm?q=Not entirely: JSON', status: 400});
   });
 
-  it('should be able to resolve nested references', !function *() {
+  it('should be able to resolve nested references', function *() {
     yield post({url: '/entities/vm', payload: {
       id: 1,
       name: 'my vm',
@@ -188,10 +188,114 @@ describe('Query Language', () => {
     }});
     yield post({url: '/entities/data_center', payload: {
       id: 3,
-      name: 'my data center'
+      name: 'my data center',
+      _links: {
+        system: 4
+      }
+    }});
+    yield post({url: '/entities/system', payload: {
+      id: 4,
+      name: 'my system'
     }});
 
-    let res = yield get({url: '/entities/vm/1', payload: {select: ['@cluster.@data_center.name']}});
-    expect(res.body['@cluster.data_center.name']).to.equal('my data center');
+    let res = yield get({url: '/entities/vm/1', payload: {select: ['@cluster.@data_center.@system.name']}});
+    expect(res.body).to.eql({
+      '@cluster.@data_center.@system.name': 'my system'
+    });
+
+    res = yield get({url: '/entities/vm/1', payload: {select: ['@cluster.@data_center.name']}});
+    expect(res.body).to.eql({
+      '@cluster.@data_center.name': 'my data center'
+    });
+
+    res = yield get({url: '/entities/vm/1', payload: {select: ['@cluster.@data_center.@system(name)']}});
+    expect(res.body).to.eql({
+      '@cluster.@data_center.@system': {
+        name: 'my system'
+      }
+    });
+
+    res = yield get({url: '/entities/vm/1', payload: {select: ['@cluster.@data_center(name)']}});
+    expect(res.body).to.eql({
+      '@cluster.@data_center': {
+        name: 'my data center'
+      }
+    });
+  });
+
+  it('should support nested projections', function *() {
+    yield post({url: '/entities/vm', payload: {
+      id: 1,
+      name: 'my vm',
+      _links: {
+        cluster: 2
+      }
+    }});
+    yield post({url: '/entities/cluster', payload: {
+      id: 2,
+      name: 'my cluster',
+      version: '3.6',
+      cpu: 'haswell',
+      _links: {
+        data_center: 3
+      }
+    }});
+    yield post({url: '/entities/data_center', payload: {
+      id: 3,
+      comment: 'my data center'
+    }});
+
+    let res = yield get({url: '/entities/vm/1', payload: {select: ['@cluster(id, name, version, @data_center.comment)']}});
+    expect(res.body).to.eql({
+      '@cluster': {
+        id: '2',
+        name: 'my cluster',
+        version: '3.6',
+        '@data_center.comment': 'my data center'
+      }
+    });
+  });
+
+  it('should resolve subcollections', function *() {
+    yield post({url: '/entities/cluster', payload: {
+      id: 1,
+      name: 'my cluster'
+    }});
+
+    let vms = [];
+    for (let i = 0; i < 3; i++) {
+      vms.push({id: i.toString(), name: 'vm' + i, _links: { cluster: '1' }});
+    }
+    yield put({url: '/entities/vm', payload: vms, status: 201});
+
+    let res = yield get({url: '/entities/cluster/1', payload: {select: ['name', '@[vm]']}});
+    expect(res.body).to.eql({
+      name: 'my cluster',
+      '@[vm]': vms
+    });
+  });
+
+  it('should resolve subcollections with projections', function *() {
+    yield post({url: '/entities/cluster', payload: {
+      id: 1,
+      name: 'my cluster'
+    }});
+
+    let vms = [];
+    for (let i = 0; i < 3; i++) {
+      vms.push({id: i.toString(), name: 'vm' + i, _links: { cluster: '1' }});
+    }
+    yield put({url: '/entities/vm', payload: vms, status: 201});
+
+    let res = yield get({url: '/entities/cluster/1', payload: {select: ['name', '@[vm].name']}});
+    expect(res.body).to.eql({
+      name: 'my cluster',
+      '@[vm].name': vms.map(vm => vm.name)
+    });
+
+    res = yield get({url: '/entities/cluster/1', payload: {select: ['@[vm](name)']}});
+    expect(res.body).to.eql({
+      '@[vm]': vms.map(vm => { return {name: vm.name}; })
+    });
   });
 });

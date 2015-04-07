@@ -29,6 +29,6 @@ selectors
 
 field = chars:letter+ { return chars.join(''); }
 
-letter = [a-zA-Z0-9_]
+letter = [a-zA-Z0-9_*]
 
 space = " "

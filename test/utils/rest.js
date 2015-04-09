@@ -1,6 +1,7 @@
 'use strict';
 
 var app = require('../../lib/index')
+  , _ = require('lodash')
   , request = require('co-supertest').agent(app.listen())
   ;
 
@@ -36,10 +37,21 @@ function remove(url, status) {
   return request.delete(url).expect(status || 204).end();
 }
 
+function *setup(entities) {
+  for (let entity of Object.keys(entities)) {
+    if (_.isArray(entities[entity])) {
+      yield put({url: `/entities/${entity}`, payload: entities[entity], status: 201});
+    } else {
+      yield post({url: `/entities/${entity}`, payload: entities[entity]});
+    }
+  }
+}
+
 module.exports = {
   get: get,
   post,
   patch,
   put,
-  remove
+  remove,
+  setup
 };

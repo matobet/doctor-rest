@@ -4,26 +4,21 @@ var expect = require('chai').expect
   , db = require('../lib/db')
   , rest = require('./utils/rest')
   , get = rest.get
-  , post = rest.post
-  , patch = rest.patch
-  , put = rest.put
-  , remove = rest.remove
   ;
 
 describe('Query Language', () => {
 
   beforeEach(function *() {
-    yield db.clear('vm', 'cluster', 'data_center', 'system');
+    yield db.clear('vm', 'cluster', 'data_center', 'system', 'disk', 'storage');
   });
 
   it('should enable to query selected fields', function *() {
-    const payload = {
+    yield rest.setup({vm: {
       id: 123,
       a: 'foo',
       b: 'bar',
       c: 'baz'
-    };
-    yield post({url: '/entities/vm', payload});
+    }});
 
     let res = yield get({url: '/entities/vm/123', payload: {select: ['a', 'b']}});
     expect(res.body.a).to.equal('foo');
@@ -39,7 +34,7 @@ describe('Query Language', () => {
       {id: 4, name: 'vm_4', status: 'up'},
       {id: 5, name: 'vm_5', status: 'migrating'}
     ];
-    yield put({url: '/entities/vm', payload: vms, status: 201});
+    yield rest.setup({vm: vms});
 
     let res = yield get({url: '/entities/vm', payload: {select: ['name', 'status']}});
     res.body.forEach((vm, i) => {
@@ -61,8 +56,7 @@ describe('Query Language', () => {
       name: 'my_cluster'
     };
 
-    yield post({url: '/entities/vm', payload: vm});
-    yield post({url: '/entities/cluster', payload: cluster});
+    yield rest.setup({vm, cluster});
 
     let res = yield get({url: '/entities/vm/123', payload: {select: ['name', 'status', '@cluster.name']}});
     console.dir(res.body);
@@ -83,8 +77,7 @@ describe('Query Language', () => {
       name: 'my_cluster'
     };
 
-    yield post({url: '/entities/vm', payload: vm});
-    yield post({url: '/entities/cluster', payload: cluster});
+    yield rest.setup({vm, cluster});
 
     let res = yield get({url: '/entities/vm/123', payload: {select: ['name', 'status', '@cluster']}});
     expect(res.body.name).to.equal(vm.name);
@@ -115,8 +108,10 @@ describe('Query Language', () => {
       name: 'my_other_cluster'
     }];
 
-    yield put({url: '/entities/vm', payload: vms, status: 201});
-    yield put({url: '/entities/cluster', payload: clusters, status: 201});
+    yield rest.setup({
+      vm: vms,
+      cluster: clusters
+    });
 
     let res = yield get({url: '/entities/vm', payload: {select: ['name', 'status', '@cluster']}});
 
@@ -151,8 +146,10 @@ describe('Query Language', () => {
       name: 'my_other_cluster'
     }];
 
-    yield put({url: '/entities/vm', payload: vms, status: 201});
-    yield put({url: '/entities/cluster', payload: clusters, status: 201});
+    yield rest.setup({
+      vm: vms,
+      cluster: clusters
+    });
 
     let query = {select: ['name', 'status', '@cluster']};
     let res = yield get({url: `/entities/vm?q=${JSON.stringify(query)}`});
@@ -172,31 +169,33 @@ describe('Query Language', () => {
   });
 
   it('should be able to resolve nested references', function *() {
-    yield post({url: '/entities/vm', payload: {
-      id: 1,
-      name: 'my vm',
-      _links: {
-        cluster: 2
+    yield rest.setup({
+      vm: {
+        id: 1,
+        name: 'my vm',
+        _links: {
+          cluster: 2
+        }
+      },
+      cluster: {
+        id: 2,
+        name: 'my cluster',
+        _links: {
+          data_center: 3
+        }
+      },
+      data_center: {
+        id: 3,
+        name: 'my data center',
+        _links: {
+          system: 4
+        }
+      },
+      system: {
+        id: 4,
+        name: 'my system'
       }
-    }});
-    yield post({url: '/entities/cluster', payload: {
-      id: 2,
-      name: 'my cluster',
-      _links: {
-        data_center: 3
-      }
-    }});
-    yield post({url: '/entities/data_center', payload: {
-      id: 3,
-      name: 'my data center',
-      _links: {
-        system: 4
-      }
-    }});
-    yield post({url: '/entities/system', payload: {
-      id: 4,
-      name: 'my system'
-    }});
+    });
 
     let res = yield get({url: '/entities/vm/1', payload: {select: ['@cluster.@data_center.@system.name']}});
     expect(res.body).to.eql({
@@ -224,26 +223,28 @@ describe('Query Language', () => {
   });
 
   it('should support nested projections', function *() {
-    yield post({url: '/entities/vm', payload: {
-      id: 1,
-      name: 'my vm',
-      _links: {
-        cluster: 2
+    yield rest.setup({
+      vm: {
+        id: 1,
+        name: 'my vm',
+        _links: {
+          cluster: 2
+        }
+      },
+      cluster: {
+        id: 2,
+        name: 'my cluster',
+        version: '3.6',
+        cpu: 'haswell',
+        _links: {
+          data_center: 3
+        }
+      },
+      data_center: {
+        id: 3,
+        comment: 'my data center'
       }
-    }});
-    yield post({url: '/entities/cluster', payload: {
-      id: 2,
-      name: 'my cluster',
-      version: '3.6',
-      cpu: 'haswell',
-      _links: {
-        data_center: 3
-      }
-    }});
-    yield post({url: '/entities/data_center', payload: {
-      id: 3,
-      comment: 'my data center'
-    }});
+    });
 
     let res = yield get({url: '/entities/vm/1', payload: {select: ['@cluster(id, name, version, @data_center.comment)']}});
     expect(res.body).to.eql({
@@ -257,16 +258,18 @@ describe('Query Language', () => {
   });
 
   it('should resolve subcollections', function *() {
-    yield post({url: '/entities/cluster', payload: {
-      id: 1,
-      name: 'my cluster'
-    }});
-
     let vms = [];
     for (let i = 0; i < 3; i++) {
       vms.push({id: i.toString(), name: 'vm' + i, _links: { cluster: '1' }});
     }
-    yield put({url: '/entities/vm', payload: vms, status: 201});
+
+    yield rest.setup({
+      cluster: {
+        id: 1,
+        name: 'my cluster'
+      },
+      vm: vms
+    });
 
     let res = yield get({url: '/entities/cluster/1', payload: {select: ['name', '@[vm]']}});
     expect(res.body).to.eql({
@@ -276,16 +279,19 @@ describe('Query Language', () => {
   });
 
   it('should resolve subcollections with projections', function *() {
-    yield post({url: '/entities/cluster', payload: {
-      id: 1,
-      name: 'my cluster'
-    }});
 
     let vms = [];
     for (let i = 0; i < 3; i++) {
       vms.push({id: i.toString(), name: 'vm' + i, _links: { cluster: '1' }});
     }
-    yield put({url: '/entities/vm', payload: vms, status: 201});
+
+    yield rest.setup({
+      cluster: {
+        id: 1,
+        name: 'my cluster'
+      },
+      vm: vms
+    });
 
     let res = yield get({url: '/entities/cluster/1', payload: {select: ['name', '@[vm].name']}});
     expect(res.body).to.eql({
@@ -297,5 +303,53 @@ describe('Query Language', () => {
     expect(res.body).to.eql({
       '@[vm]': vms.map(vm => { return {name: vm.name}; })
     });
+  });
+
+  it('should resolve nested references in subcollections', function *() {
+    const bigStorage = {id: '1', name: 'Big storage'};
+    const smallStorage = {id: '2', name: 'Small storage'};
+    yield rest.setup({
+      vm: [
+        {id: 1, _links: { disk: [1, 2] }},
+        {id: 2, _links: { disk: [1]}}
+      ],
+      disk: [
+        {id: 1, _links: { storage: bigStorage.id }},
+        {id: 2, _links: { storage: smallStorage.id }}
+      ],
+      storage: [
+        bigStorage,
+        smallStorage
+      ]
+    });
+    let res = yield get({url: '/entities/vm', payload: {select: ['@[disk].@storage']}});
+    expect(res.body).to.eql([
+      { '@[disk].@storage': [bigStorage, smallStorage] },
+      { '@[disk].@storage': [bigStorage] }
+    ]);
+  });
+
+  it('should support nested projection in subcollections', function *() {
+    const bigStorage = {id: '1', name: 'Big storage'};
+    const smallStorage = {id: '2', name: 'Small storage'};
+    yield rest.setup({
+      vm: [
+        {id: 1, _links: { disk: [1, 2] }},
+        {id: 2, _links: { disk: [1]}}
+      ],
+      disk: [
+        {id: 1, _links: { storage: bigStorage.id }},
+        {id: 2, _links: { storage: smallStorage.id }}
+      ],
+      storage: [
+        bigStorage,
+        smallStorage
+      ]
+    });
+    let res = yield get({url: '/entities/vm', payload: {select: ['@[disk].@storage(name)']}});
+    expect(res.body).to.eql([
+      { '@[disk].@storage': [{name: bigStorage.name}, {name: smallStorage.name}] },
+      { '@[disk].@storage': [{name: bigStorage.name}] }
+    ]);
   });
 });

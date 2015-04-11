@@ -109,7 +109,7 @@ describe("MQTT push notification", function () {
     push.expect('vm/push_message_342', '+');
     yield post({url: '/entities/vm', payload});
     push.expect('vm/push_message_342', '-');
-    yield remove('/entities/vm/push_message_342');
+    yield remove({url: '/entities/vm/push_message_342'});
 
     yield push.wait();
   });
@@ -119,7 +119,7 @@ describe("MQTT push notification", function () {
     for (let vm of vms) {
       push.expect('vm/' + vm.id, '-');
     }
-    yield remove('/entities/vm');
+    yield remove({url: '/entities/vm'});
 
     yield push.wait();
   });

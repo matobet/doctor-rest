@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node --harmony_classes --harmony_arrow_functions lib/index.js",
     "lint": "./node_modules/jshint/bin/jshint lib test",
-    "test": "MONGO_MAIN_DB=doctor_test PORT_OFFSET=1 node --harmony_classes --harmony_arrow_functions ./node_modules/mocha/bin/_mocha -G --require co-mocha",
+    "test": "SECRET=much MONGO_MAIN_DB=doctor_test PORT_OFFSET=1 node --harmony_classes --harmony_arrow_functions ./node_modules/mocha/bin/_mocha -G --require co-mocha",
     "pretest": "npm run lint",
     "forever": "./node_modules/nodemon/bin/nodemon.js --exec npm start",
     "forever-test": "./node_modules/nodemon/bin/nodemon.js --exec npm test"

@@ -156,16 +156,16 @@ describe('Entity Collections', () => {
   describe('DELETE', () => {
 
     it('should safely delete non-existing collection', function *() {
-      yield remove('/entities/blurp');
+      yield remove({url: '/entities/blurp'});
     });
 
     it('should delete existing document', function *() {
       yield post({url: '/entities/vm', payload});
-      yield remove('/entities/vm/very_unique');
+      yield remove({url: '/entities/vm/very_unique'});
     });
 
     it('should return 404 on attempt to delete non-existing document', function *() {
-      yield remove('/entities/vm/blurp', 404);
+      yield remove({url: '/entities/vm/blurp', status: 404});
     });
   });
 });

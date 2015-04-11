@@ -1,6 +1,7 @@
 'use strict';
 
 var app = require('../../lib/index')
+  , config = require('../../lib/config')
   , _ = require('lodash')
   , request = require('co-supertest').agent(app.listen())
   ;
@@ -8,33 +9,40 @@ var app = require('../../lib/index')
 function get(options) {
   let url = options.url;
   let status = options.status || 200;
+  let secret = options.secret || config.SECRET;
   let payload = options.payload;
-  return request.get(url).send(payload).expect(status).type('json').end();
+  return request.get(url).set('secret', secret).send(payload).expect(status).type('json').end();
 }
 
 function post(options) {
   let url = options.url;
   let status = options.status || 201;
+  let secret = options.secret || config.SECRET;
   let payload = options.payload;
-  return request.post(url).send(payload).expect(status).end();
+  return request.post(url).set('secret', secret).send(payload).expect(status).end();
 }
 
 function patch(options) {
   let url = options.url;
   let status = options.status || 200;
+  let secret = options.secret || config.SECRET;
   let payload = options.payload;
-  return request.patch(url).send(payload).expect(status).end();
+  return request.patch(url).set('secret', secret).send(payload).expect(status).end();
 }
 
 function put(options) {
   let url = options.url;
   let status = options.status || 200;
+  let secret = options.secret || config.SECRET;
   let payload = options.payload;
-  return request.put(url).send(payload).expect(status).end();
+  return request.put(url).set('secret', secret).send(payload).expect(status).end();
 }
 
-function remove(url, status) {
-  return request.delete(url).expect(status || 204).end();
+function remove(options) {
+  let url = options.url;
+  let status = options.status || 204;
+  let secret = options.secret || config.SECRET;
+  return request.delete(url).set('secret', secret).expect(status).end();
 }
 
 function *setup(entities) {

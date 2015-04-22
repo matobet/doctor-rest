@@ -19,13 +19,38 @@ In addition to push support it leverages the fact that to diff the documents we 
 ## Documents
 
 Document is any JSON object that contains the `id` attribute and fields with some restrictions.
-The field name may not contain `'.', '@' ` or start with `'_'` and currently nested objects are not supported (i.e. the document has to contain only flat structure of key: value pairs where value is not object or array).
+The field name may not contain `'.', '@' ` or start with `'_'` and currently nested objects are not supported (i.e. the document has to contain only flat structure of key: value pairs where value is not object or array). Document may optionally contain a special property `_links` with references to to other document collections.
 
-Documents are grouped into collections (terminology similar to underlying MongoDB). Thanks to Doctor's generic approach the structure and content of documents is purely defined by the connector. To ease explanation we will use sample entities from the [oVirt project](www.ovirt.org), e.g. VMs, Clusters, DataCenters...
+Documents are grouped into collections (terminology similar to underlying MongoDB). Thanks to Doctor's generic approach the structure and content of documents is purely defined by the connector. To ease explanation we will use sample entities from the [oVirt project](http://www.ovirt.org), e.g. VMs, Clusters, DataCenters...
 
-All manipulation with Doctor's entity collection is done using the REST endpoint `/entities`. The individual collections are then identified by singular name of entity - e.g `/entities/vm` or `/entities/cluster`. Note that the connector doesn't need to specify the "schema" of these collections beforehand. Just push new data and doctor will create the underlying collection as needed.
+### Example Documents
+
+Cluster:
+
+    {
+        "id": "44c687d0-0ac5-4e2d-b17b-9cff5681f7b1",
+        "name": "Default",
+        "version/major": 3,
+        "version/minor": 6
+    }
+
+VM:
+
+    {
+        "id": "1963c0f2-2490-4810-a66f-0e76d81ebea2",
+        "name": "vm1",
+        "status": "up"
+        "_links": {
+            "cluster": "44c687d0-0ac5-4e2d-b17b-9cff5681f7b1",
+            "template": "00000000-0000-0000-0000-000000000000",
+            "disk": ["disk_id_1", "disk_id_2"]
+        }
+    }
+
 
 ### Creating & Updating Documents
+
+All manipulation with Doctor's entity collection is done using the REST endpoint `/entities`. The individual collections are then identified by singular name of entity - e.g `/entities/vm` or `/entities/cluster`. Note that the connector doesn't need to specify the "schema" of these collections beforehand. Just push new data and doctor will create the underlying collection as needed.
 
 Let's create a new VM
 
@@ -110,12 +135,15 @@ MQTT broadcast:
     {
         "name": "vm1",
         "status": "down",
-        "exit_reason": "Admin Shutdown"
+        "exit_reason": "Admin Shutdown",
+        "_links": {
+            "cluster": "00000002-0002-0002-0002-000000000189"
+        }
     }
 
-When document is updated whether using `PUT` or `PATCH`, the real diff is computed and names of properties of document that have actually changed are broadcast on the document's topic (comma separated):
+When document is updated whether using `PUT` or `PATCH`, the real diff is computed and names of properties of document that have actually changed are broadcast on the document's topic (comma separated). In case some of the links have changed we prefix the link name with `@`. This is consistent with how the query language works (see *Query Capabilities*):
 
-    topic='vm/1963c0f2-2490-4810-a66f-0e76d81ebea2' payload='status,exit_reason'
+    topic='vm/1963c0f2-2490-4810-a66f-0e76d81ebea2' payload='status,exit_reason,@cluster'
 
 ### Document Removed
 
@@ -125,5 +153,28 @@ Similarly to document creation, removal results in simplified broadcast
 
     topic='vm/1963c0f2-2490-4810-a66f-0e76d81ebea2' payload='-'
 
+
 ### Bulk Operations
 In case of bulk operation the diff is made for each individual document and appropriate creation/modification/removal broadcasts are made for each document (and on each respective topic corresponding to given document).
+
+## Query Capabilities
+
+To simply get all documents of given type you would probably expect
+
+    GET /entities/vm
+
+to work and indeed it does. Similarly to get specific document
+
+    GET /entities/vm/1963c0f2-2490-4810-a66f-0e76d81ebea2
+
+But these most basic `GET`'s return the whole documents in their entirety. To be more specific and query just the fields you are interested in we introduce the selector object.
+
+    {
+        "select": ["id", "name", "status"]
+    }
+
+It is an object that may be specified either as a body of the `GET` request (which many clients don't support) or as a query parameter:
+
+    GET /entities/vm?q={"select": ["id", "name", "status"]}
+
+Where the exact same JSON object is serialized as the value of the `q` query parameter.

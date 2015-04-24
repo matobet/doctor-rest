@@ -11,6 +11,22 @@ diff the documents and publish changes on appropriate MQTT topics using embedded
 In addition to push support it leverages the fact that to diff the documents we have to store them somewhere
 (currently MongoDB) and provides simple language to query the documents.
 
+## Running
+
+To run doctor simply
+
+    npm install
+    npm start
+
+For `npm start` you can also specify several environment variables to configure Doctor's behavior. All except `SECRET` have
+reasonable default values.
+
+* SECRET - shared secret to be used by *Connector*'s to invoke privileged operations
+* MONGO_HOST - host[:port] where mongo server is running
+* MONGO_MAIN_DB - mongo database to be used
+* API_PORT - port for Doctor REST API
+* MQTT_PORT - port for embedded MQTT broker
+
 ## Main Concepts
 * **Document**  a thing (JSON document) of value that will be stored and diffed by Doctor
 * **Session**   an abstract representation of logged in user (permissions are validated with respect to sessions)
@@ -385,3 +401,67 @@ will return
             }]
          }]
     }]
+
+
+## Security
+
+Doctor Rest enables in addition to *Documents* also to track logged in user *Sessions*. Doctor is designed to be consumed primarily
+by frontend applications and frontend applications usually require some form of authentication and/or role based access control.
+
+To simplify implementation and maintain the largest degree of universality, doctor tracks only individual sessions and validates
+permissions to read documents with respect to those sessions. It is the responsibility of the *Connector* to manage Doctor Sessions.
+
+
+Connector can access the permissions at the endpoint `/sessions` and do typical CRUD operations. Similarly to documents, each
+session is required to have unique ID.
+
+### Permissions
+
+A session that can be used to `GET` documents from doctor needs to also contain `permissions` object.
+
+The `permissions` object serves as a whitelist (with optional wildcards) of documents that this *Session* access.
+
+Example:
+
+    POST /sessions
+    {
+        "id": 1,
+        "permissions": {
+            "vm": "1963c0f2-2490-4810-a66f-0e76d81ebea2"
+        }
+    }
+
+This will create session that can access single VM.
+
+Permissions object can contain multiple document collection names, for example to access a specific 2 VMs and one specific cluster the permissions object would look like
+
+    "permissions: {
+        "vm": ["1963c0f2-2490-4810-a66f-0e76d81ebea2", "ef1d94b9-c4d5-4e3b-addf-7bb57d6a91f9"],
+        "cluster": "44c687d0-0ac5-4e2d-b17b-9cff5681f7b1"
+    }
+
+When a session can access all documents of given type, the `"*"` wildcard can be used as follows:
+
+    "permissions: {
+        "template": "*"
+    }
+
+This session will be able to access all Templates (but nothing else).
+
+In case an Administrator user is logged in (that can access all of system), we can simplify the permission object even
+further by specifying wildcard at the root of permissions object:
+
+    "permissions": "*"
+
+These sessions are then utilized by the client that actually requests the documents by specifying the `SESSION` header
+of the request with the value of session id.
+
+### Connector Privilege
+
+Independent of the per-document permissions facilitated by sessions & permissions stands the authentication of *Connector* against Doctor.
+Connector is the agent that is able to manage sessions and issue non-`GET` requests, so it's security is handled separately.
+
+Upon start, Doctor Rest will read an environment variable `SECRET` that will be shared between Doctor and Connector. Connector must include the value of the shared
+secret in the `SECRET` header to be able to execute privileged operations.
+
+In case the `SECRET` environment variable is not specified when starting Doctor, it will be started in **unsecured** mode where all operations are public.

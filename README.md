@@ -6,7 +6,7 @@ Generic proxy for REST-ful APIs with custom query language and MQTT push notific
 ## Description
 
 Doctor Rest (short from **DOC**umen**T** **OR**iented REST) is a generic microservice with simple REST-ful API that enables external connectors to throw documents at it and Doctor will make sure to properly
-diff the documents and publish changes on appropriate MQTT topics using embedded MQTT broker. 
+diff the documents and publish changes on appropriate MQTT topics using embedded MQTT broker.
 
 In addition to push support it leverages the fact that to diff the documents we have to store them somewhere
 (currently MongoDB) and provides simple language to query the documents.
@@ -79,7 +79,7 @@ Doctor also supports bulk operations for connectors that are doing for example b
        "name": "vm3",
        "status": "unknown"
     }]
-    
+
 The `PUT` operation will replace content of entire collection thus destroying all old values.
 
 To update a specific document simply
@@ -99,7 +99,7 @@ Even when doing full replaces, the Doctor is smart enough to publish only update
     {
         "status": "down"
     }
-    
+
 To delete a single documents simply
 
     DELETE /entities/vm/1963c0f2-2490-4810-a66f-0e76d81ebea2
@@ -107,7 +107,7 @@ To delete a single documents simply
 Dropping the entire document collection is similar
 
     DELETE /entities/vm
-    
+
 
 Plese note that all entity operations with HTTP verbs `POST`, `PUT`, `PATCH` and `DELETE` are privileged to the connector and require the `SECRET` header to be set.
 
@@ -124,8 +124,8 @@ When documents are created, changed and removed Doctor publishes notifications a
        "status": "up"
     }
 
-When a document is created whether using `POST` or `PUT` a string with content "+" is broadcast on topic constructed using document collection name and document id. 
-MQTT broadcast: 
+When a document is created whether using `POST` or `PUT` a string with content "+" is broadcast on topic constructed using document collection name and document id.
+MQTT broadcast:
 
     topic='vm/1963c0f2-2490-4810-a66f-0e76d81ebea2' payload='+'
 
@@ -178,3 +178,210 @@ It is an object that may be specified either as a body of the `GET` request (whi
     GET /entities/vm?q={"select": ["id", "name", "status"]}
 
 Where the exact same JSON object is serialized as the value of the `q` query parameter.
+
+### Document References
+
+In addition to selecting direct fields of given document, the selector syntax supports aggregation of data from documents linked using the `_links` object. There are two basic types of references: one-to-one and one-to-many.
+
+#### One-to-One references
+
+One to one referene is the case when a document contains as a link a single id to different document. For example VM may contain cluster id or a cluster may in turn contain storage domain id.
+
+Example dataset:
+
+Data Center
+
+    POST /entities/data_center
+    {
+        "id": "00000001-0001-0001-0001-0000000002bb",
+        "name": "Default DC",
+        "version": "3.5"
+    }
+
+Cluster
+
+    POST /entities/cluster
+    {
+        "id": "44c687d0-0ac5-4e2d-b17b-9cff5681f7b1",
+        "name": "Default",
+        "version": "3.6",
+        "_links": {
+            "data_center": "00000001-0001-0001-0001-0000000002bb"
+        }
+    }
+
+VM
+
+    POST /entities/vm
+    {
+        "id": "1963c0f2-2490-4810-a66f-0e76d81ebea2",
+        "name": "vm1",
+        "status": "up",
+        "_links": {
+            "cluster": "44c687d0-0ac5-4e2d-b17b-9cff5681f7b1"
+        }
+    }
+
+The simplest case is when we want to query individual fields from referenced documents, for example to get all VMs with names of cluster and cluster's data center.
+
+    GET /entities/vm?q={"select": ["id", "name", "@cluster.name", "@cluster.@data_center.name"]}
+
+This will return VM documents embedded with required referenced fields. Note that these fields will be named using the path
+used to reference given value. This example utilizes two one-to-one relationships (`vm->cluster` and `cluster->data_center`).
+Doctor supports resolution of such relationships to arbitrary depth.
+
+    [{
+        "id": "1963c0f2-2490-4810-a66f-0e76d81ebea2",
+        "name": "vm1",
+        "@cluster.name": "Default",
+        "@cluster.@data_center.name": "Default DC"
+    }]
+
+In cases when we explicitly select referential fields in addition to whole document a special field selector `"*"` is supported, so the client doesn't need to
+specify all fields manually. Example:
+
+    GET /entities/vm/1963c0f2-2490-4810-a66f-0e76d81ebea2?q={"select": ["*", "@cluster.name""]}
+
+will return
+
+    {
+        "id": "1963c0f2-2490-4810-a66f-0e76d81ebea2",
+        "name": "vm1",
+        "status": "up",
+        "_links": {
+            "cluster": "44c687d0-0ac5-4e2d-b17b-9cff5681f7b1"
+        },
+        "@cluster.name": "Default"
+    }
+
+##### Embedding References
+
+In the first example we queried two independent properties of VM's cluster (it's `name` and `@data_center.name`). In cases like this it may be useful to embed whole referenced documents into the respnse. Example:
+
+    GET /entities/vm?q={"select": ["name", "status", "@cluster"]}
+
+will return
+
+    [{
+        "name": "vm1",
+        "status": "up",
+        "@cluster": {
+            "id": "44c687d0-0ac5-4e2d-b17b-9cff5681f7b1",
+            "name": "Default",
+            "version": "3.6",
+            "_links": {
+                "data_center": "00000001-0001-0001-0001-0000000002bb"
+            }
+        }
+    }]
+
+But sometimes embedding the entire (possibly large) document may not be desirable. To maintain this grouped structure provided by embedding references while preserving the power to select only given fields of the referenced document, the following syntax is supported:
+
+    GET /entities/vm?q={"select": ["name", "status", "@cluster(name, @data_center.name)"]}
+
+which will return
+
+    [{
+        "name": "vm1",
+        "status": "up",
+        "@cluster": {
+            "name": "Default",
+            "@data_center.name": "Default DC"
+        }
+    }]
+
+Inside the `( )` one can specify a comma separated list of selectors (that will be relative to currently embedded object) and again full power of selectors is supported (and to arbitrary depth).
+
+#### One-to-Many references
+
+The other type of supported relationship is One-To-Many. One-To-Many relationship may arise in two ways. First case is that document directly contains array of ID's
+in its `_links` object (can be seen in very first example of VM document). The second case arises when multiple documents have same One-to-One reference to same
+document. For example when multiple VMs point to same Cluster document, we may query the Cluster's VMs.
+
+In both cases the syntax is the same: `@[<referenced_name>]`. Notice the additional `[ ]` around the reference name compared to one-to-one references. Example:
+
+    GET /entities/cluster?q={"select": ["name", "version", "@[vm]"]}
+
+will return:
+
+    [{
+        "name": "Default",
+        "version": "3.6",
+        "@[vm]": [{
+            "id": "1963c0f2-2490-4810-a66f-0e76d81ebea2",
+            "name": "vm1",
+            "status": "up",
+            "_links": {
+                "cluster": "44c687d0-0ac5-4e2d-b17b-9cff5681f7b1"
+            }
+        }]
+    }]
+
+Again field projections are supported so
+
+    GET /entities/cluster?q={"select": ["name", "version", "@[vm](name, status)"]}
+
+will return
+
+    [{
+        "name": "Default",
+        "version": "3.6",
+        "@[vm]": [{
+            "name": "vm1",
+            "status": "up",
+        }]
+    }]
+
+The simplified case where we wanted to query just `@cluster.name` for VM also works in One-to-Many relationships. In this case
+
+    GET /entities/cluster?q={"select": ["name", "version", "@[vm].name"]}
+
+will return embedded array of VM names
+
+    [{
+        "name": "Default",
+        "version": "3.6",
+        "@[vm].name": ["vm1"]
+    }]
+
+Again arbitrary nesting of all above features is supported so to query data centers with embedded list of clusters
+where each cluster will contain aggregated VM names and statuses and list of disk names.
+
+But first let's create the missing disks:
+
+    PUT /entities/disk
+    [{
+        "id": 1,
+        "name": "My Disk 1",
+        "size": 1024,
+        "_links": {
+            "vm": "1963c0f2-2490-4810-a66f-0e76d81ebea2"
+        }
+    }, {
+        "id": 2,
+        "name": "My Disk 2",
+        "size": 2048,
+        "_links": {
+            "vm": "1963c0f2-2490-4810-a66f-0e76d81ebea2"
+        }
+    }]
+
+and now
+
+    GET /entities/data_center?q={"select": ["*", "@[cluster](name, version, @[vm](name, status, @[disk].name))"]}
+
+will return
+
+    [{
+        "id": "00000001-0001-0001-0001-0000000002bb",
+        "name": "Default DC",
+        "version": "3.5",
+        "@[cluster]": [{
+            "name": "Default",
+            "@[vm]": [{
+                "name": "vm1",
+                "status": "up",
+                "@[disk].name": ["My Disk 1", "My Disk 2"]
+            }]
+         }]
+    }]

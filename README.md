@@ -18,7 +18,15 @@ To run doctor simply
     npm install
     npm start
 
-For `npm start` you can also specify several environment variables to configure Doctor's behavior. All except `SECRET` have
+### Docker
+
+To avoid having to install io.js and npm dependencies a docker image is available. Just make sure to expose ports for Doctor Rest API and MQTT (default 3000 and 1883).
+
+    docker run -it -p 3000 -p 1883 --net=host matobet/doctor-rest
+
+For both docker and non-docker runs a running instance of MongoDB is required. By default running on localhost on port 27017.
+
+You can also specify several environment variables to configure Doctor's behavior. All except `SECRET` have
 reasonable default values.
 
 * SECRET - shared secret to be used by *Connector*'s to invoke privileged operations

@@ -257,6 +257,41 @@ describe('Query Language', () => {
     });
   });
 
+  it('should support wildcard projections', function *() {
+    yield rest.setup({
+      vm: {
+        id: 1,
+        name: 'foo'
+      }
+    });
+    let res = yield get({url: '/entities/vm/1', payload: {select: ['*']}});
+    expect(res.body).to.eql({
+      id: '1',
+      name: 'foo'
+    });
+  });
+
+  it('should support nested wildcard projections', function *() {
+    let vm = {
+      id: 1,
+      name: 'foo',
+      _links: {
+        host: 2
+      }
+    };
+    let host = {
+      id: 2,
+      name: 'host 123'
+    };
+    yield rest.setup({vm, host});
+
+    let res = yield get({url: '/entities/vm/1', payload: {select: ['name', '@host(*)']}});
+    expect(res.body).to.eql({
+      name: 'foo',
+      '@host': {id: '2', name: 'host 123'}
+    });
+  });
+
   it('should resolve subcollections', function *() {
     let vms = [];
     for (let i = 0; i < 3; i++) {

@@ -1,4 +1,4 @@
-FROM iojs:2-onbuild
+FROM iojs:latest
 
 MAINTAINER Martin Betak <matobet@gmail.com>
 

@@ -42,10 +42,44 @@ describe("MQTT push notification", function () {
     yield push.wait();
   });
 
+  it('should be sent when nested object changes', function *() {
+    const vm = {
+      id: '123',
+      data: {
+        head: 'foo',
+        body: [1, 2, 3]
+      }
+    };
+    push.expect('vm/123', '+');
+    yield rest.setup({vm});
+
+    vm.data.body[2] = 42;
+
+    push.expect('vm/123', 'data');
+    yield put({url: '/entities/vm/123', payload: vm});
+
+    yield push.wait();
+  });
+
   it('should not be sent when nothing changes', function *() {
     push.expect('vm/push_message_342', '+');
     yield post({url: '/entities/vm', payload});
     yield put({url: '/entities/vm/push_message_342', payload});
+    yield push.wait();
+  });
+
+  it('should not be sent when nested object does not change', function *() {
+    const vm = {
+      id: '123',
+      data: {
+        head: 'foo',
+        body: [1, 2, 3]
+      }
+    };
+    push.expect('vm/123', '+');
+    yield rest.setup({vm});
+
+    yield put({url: '/entities/vm/123', payload: vm});
     yield push.wait();
   });
 

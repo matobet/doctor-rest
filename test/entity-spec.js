@@ -67,6 +67,20 @@ describe('Entity Collections', () => {
       expect(res.body).to.eql(documents);
     });
 
+    it('should support nested documents', function *() {
+      const vm = {
+        id: '123',
+        boot: [
+          { device: 'cdrom' },
+          { device: 'hdd' }
+        ]
+      };
+
+      yield rest.setup({vm});
+
+      let res = yield get({url: '/entities/vm/123'});
+      expect(res.body).to.eql(vm);
+    });
   });
 
   describe('PATCH', () => {

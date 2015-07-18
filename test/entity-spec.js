@@ -158,6 +158,14 @@ describe('Entity Collections', () => {
       yield put({url: '/entities/vm', payload: documents, status: 400});
     });
 
+    it('should validate id uniqueness on bulk create/update', function *() {
+      const documents = [
+        { id: 123 },
+        { id: 123 }
+      ];
+      yield put({url: '/entities/vm', payload: documents, status: 400});
+    });
+
     it('should return 200 on replace existing collection', function *() {
       const documents = _.times(5, i => {
         return {'id': "id_" + i, name: "name_" + i};

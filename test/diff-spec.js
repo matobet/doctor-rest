@@ -11,8 +11,7 @@ describe('Diff', () => {
     it('should return empty diff on equal objects', () => {
       var obj = {id: 42, data: 'foo'};
       expect(diff.object(obj, obj)).to.eql({
-        fields: [],
-        links: []
+        fields: []
       });
     });
 
@@ -20,50 +19,7 @@ describe('Diff', () => {
       var original = {id: 42, data: 'xyz'};
       var updated = {id: 42, data: 'abc', new_field: true};
       expect(diff.object(original, updated)).to.eql({
-        fields: ['data', 'new_field'],
-        links: []
-      });
-    });
-
-    it('should return diff when links change', () => {
-      var original = {
-        id: 42,
-        _links: {
-          cluster: 88
-        }
-      };
-      var updated = {
-        id: 42,
-        _links: {
-          cluster: 99
-        }
-      };
-      expect(diff.object(original, updated)).to.eql({
-        fields: [],
-        links: ['cluster']
-      });
-    });
-
-    it('should return diff when links are added or removed', () => {
-      var original = {
-        id: 42,
-        data: 'some data',
-        _links: {
-          cluster: 88,
-          data_center: 3
-        }
-      };
-      var updated = {
-        id: 42,
-        data: 'data changed',
-        _links: {
-          data_center: 4,
-          template: 18
-        }
-      };
-      expect(diff.object(original, updated)).to.eql({
-        fields: ['data'],
-        links: ['cluster', 'data_center', 'template']
+        fields: ['data', 'new_field']
       });
     });
   });
@@ -111,8 +67,7 @@ describe('Diff', () => {
         created: [],
         updated: [{
           id: 'lol',
-          fields: ['data', 'new_field'],
-          links: []
+          fields: ['data', 'new_field']
         }],
         deleted: []
       });

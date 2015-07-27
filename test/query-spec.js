@@ -21,8 +21,10 @@ describe('Query Language', () => {
     }});
 
     let res = yield get({url: '/entities/vm/123', payload: {select: ['a', 'b']}});
-    expect(res.body.a).to.equal('foo');
-    expect(res.body.b).to.equal('bar');
+    expect(res.body).to.eql({
+      a: 'foo',
+      b: 'bar'
+    });
     expect(res.body.c).to.be.undefined;
   });
 
@@ -49,7 +51,7 @@ describe('Query Language', () => {
       id: 123,
       name: 'my_vm',
       status: 'up',
-      _links: {cluster: 456}
+      cluster: 456
     };
     const cluster = {
       id: 456,
@@ -60,9 +62,11 @@ describe('Query Language', () => {
 
     let res = yield get({url: '/entities/vm/123', payload: {select: ['name', 'status', '@cluster.name']}});
     console.dir(res.body);
-    expect(res.body.name).to.equal(vm.name);
-    expect(res.body.status).to.equal(vm.status);
-    expect(res.body['@cluster.name']).to.equal(cluster.name);
+    expect(res.body).to.eql({
+      name: vm.name,
+      status: vm.status,
+      '@cluster.name': cluster.name
+    });
   });
 
   it('should support embedding of linked objects', function *() {
@@ -70,7 +74,7 @@ describe('Query Language', () => {
       id: 123,
       name: 'my_vm',
       status: 'up',
-      _links: {cluster: 456}
+      cluster: 456
     };
     const cluster = {
       id: 456,
@@ -92,12 +96,12 @@ describe('Query Language', () => {
       id: 123,
       name: 'my_vm',
       status: 'up',
-      _links: {cluster: 456}
+      cluster: 456
     }, {
       id: 124,
       name: 'my_vm2',
       status: 'down',
-      _links: {cluster: 457}
+      cluster: 457
     }];
 
     const clusters = [{
@@ -130,12 +134,12 @@ describe('Query Language', () => {
       id: 123,
       name: 'my_vm',
       status: 'up',
-      _links: {cluster: 456}
+      cluster: 456
     }, {
       id: 124,
       name: 'my_vm2',
       status: 'down',
-      _links: {cluster: 457}
+      cluster: 457
     }];
 
     const clusters = [{
@@ -173,23 +177,17 @@ describe('Query Language', () => {
       vm: {
         id: 1,
         name: 'my vm',
-        _links: {
-          cluster: 2
-        }
+        cluster: 2
       },
       cluster: {
         id: 2,
         name: 'my cluster',
-        _links: {
-          data_center: 3
-        }
+        data_center: 3
       },
       data_center: {
         id: 3,
         name: 'my data center',
-        _links: {
-          system: 4
-        }
+        system: 4
       },
       system: {
         id: 4,
@@ -222,23 +220,37 @@ describe('Query Language', () => {
     });
   });
 
+  it('should support "0" as link value', function *() {
+    yield rest.setup({
+      vm: {
+        id: 1,
+        cluster: 0
+      },
+      cluster: {
+        id: 0,
+        name: 'my cluster'
+      }
+    });
+
+    let res = yield get({url: '/entities/vm/1', payload: {select: ['@cluster.name']}});
+    expect(res.body).to.eql({
+      '@cluster.name': 'my cluster'
+    });
+  });
+
   it('should support nested projections', function *() {
     yield rest.setup({
       vm: {
         id: 1,
         name: 'my vm',
-        _links: {
-          cluster: 2
-        }
+        cluster: 2
       },
       cluster: {
         id: 2,
         name: 'my cluster',
         version: '3.6',
         cpu: 'haswell',
-        _links: {
-          data_center: 3
-        }
+        data_center: 3
       },
       data_center: {
         id: 3,
@@ -275,9 +287,7 @@ describe('Query Language', () => {
     let vm = {
       id: 1,
       name: 'foo',
-      _links: {
-        host: 2
-      }
+      host: 2
     };
     let host = {
       id: 2,
@@ -295,7 +305,7 @@ describe('Query Language', () => {
   it('should resolve subcollections', function *() {
     let vms = [];
     for (let i = 0; i < 3; i++) {
-      vms.push({id: i.toString(), name: 'vm' + i, _links: { cluster: '1' }});
+      vms.push({id: i.toString(), name: 'vm' + i, cluster: '1'});
     }
 
     yield rest.setup({
@@ -317,7 +327,7 @@ describe('Query Language', () => {
 
     let vms = [];
     for (let i = 0; i < 3; i++) {
-      vms.push({id: i.toString(), name: 'vm' + i, _links: { cluster: '1' }});
+      vms.push({id: i.toString(), name: 'vm' + i, cluster: '1'});
     }
 
     yield rest.setup({
@@ -345,12 +355,12 @@ describe('Query Language', () => {
     const smallStorage = {id: '2', name: 'Small storage'};
     yield rest.setup({
       vm: [
-        {id: 1, _links: { disk: [1, 2] }},
-        {id: 2, _links: { disk: [1]}}
+        {id: 1, disk: [1, 2] },
+        {id: 2, disk: [1] }
       ],
       disk: [
-        {id: 1, _links: { storage: bigStorage.id }},
-        {id: 2, _links: { storage: smallStorage.id }}
+        {id: 1, storage: bigStorage.id },
+        {id: 2, storage: smallStorage.id }
       ],
       storage: [
         bigStorage,
@@ -369,12 +379,12 @@ describe('Query Language', () => {
     const smallStorage = {id: '2', name: 'Small storage'};
     yield rest.setup({
       vm: [
-        {id: 1, _links: { disk: [1, 2] }},
-        {id: 2, _links: { disk: [1]}}
+        {id: 1, disk: [1, 2] },
+        {id: 2, disk: [1]}
       ],
       disk: [
-        {id: 1, _links: { storage: bigStorage.id }},
-        {id: 2, _links: { storage: smallStorage.id }}
+        {id: 1, storage: bigStorage.id },
+        {id: 2, storage: smallStorage.id }
       ],
       storage: [
         bigStorage,

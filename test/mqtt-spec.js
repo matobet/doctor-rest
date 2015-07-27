@@ -158,17 +158,6 @@ describe("MQTT push notification", function () {
     yield push.wait();
   });
 
-  describe('Links', () => {
-
-    it('should be sent on link change', function *() {
-      push.expect('vm/push_message_342', '+');
-      yield post({url: '/entities/vm', payload});
-      push.expect('vm/push_message_342', '@cluster');
-      yield patch({url: '/entities/vm/push_message_342', payload: {_links: {cluster: 42}}});
-      yield push.wait();
-    });
-  });
-
   // this test should be last
   it('should not send any extra messages', function *() {
     yield push.wait();

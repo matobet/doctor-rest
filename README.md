@@ -43,7 +43,8 @@ reasonable default values.
 ## Documents
 
 Document is any JSON object that contains the `id` attribute and fields with some restrictions.
-The field name may not contain `'.', '@' ` or start with `'_'` and currently nested objects are not supported (i.e. the document has to contain only flat structure of key: value pairs where value is not object or array). Document may optionally contain a special property `_links` with references to to other document collections.
+The field name may not contain `'.', '@' ` or start with `'_'`.
+Nested documents are supported but in case of change the push notifications will be generated only for the top level key.
 
 Documents are grouped into collections (terminology similar to underlying MongoDB). Thanks to Doctor's generic approach the structure and content of documents is purely defined by the connector. To ease explanation we will use sample entities from the [oVirt project](http://www.ovirt.org), e.g. VMs, Clusters, DataCenters...
 
@@ -64,11 +65,9 @@ VM:
         "id": "1963c0f2-2490-4810-a66f-0e76d81ebea2",
         "name": "vm1",
         "status": "up"
-        "_links": {
-            "cluster": "44c687d0-0ac5-4e2d-b17b-9cff5681f7b1",
-            "template": "00000000-0000-0000-0000-000000000000",
-            "disk": ["disk_id_1", "disk_id_2"]
-        }
+        "cluster": "44c687d0-0ac5-4e2d-b17b-9cff5681f7b1",
+        "template": "00000000-0000-0000-0000-000000000000",
+        "disk": ["disk_id_1", "disk_id_2"]
     }
 
 
@@ -160,14 +159,12 @@ MQTT broadcast:
         "name": "vm1",
         "status": "down",
         "exit_reason": "Admin Shutdown",
-        "_links": {
-            "cluster": "00000002-0002-0002-0002-000000000189"
-        }
+        "cluster": "00000002-0002-0002-0002-000000000189"
     }
 
-When document is updated whether using `PUT` or `PATCH`, the real diff is computed and names of properties of document that have actually changed are broadcast on the document's topic (comma separated). In case some of the links have changed we prefix the link name with `@`. This is consistent with how the query language works (see *Query Capabilities*):
+When document is updated whether using `PUT` or `PATCH`, the real diff is computed and names of properties of document that have actually changed are broadcast on the document's topic (comma separated):
 
-    topic='vm/1963c0f2-2490-4810-a66f-0e76d81ebea2' payload='status,exit_reason,@cluster'
+    topic='vm/1963c0f2-2490-4810-a66f-0e76d81ebea2' payload='status,exit_reason,cluster'
 
 ### Document Removed
 
@@ -205,11 +202,13 @@ Where the exact same JSON object is serialized as the value of the `q` query par
 
 ### Document References
 
-In addition to selecting direct fields of given document, the selector syntax supports aggregation of data from documents linked using the `_links` object. There are two basic types of references: one-to-one and one-to-many.
+In addition to selecting direct fields of given document, the selector syntax supports aggregation of data from related documents.
+There are two basic types of references: one-to-one and one-to-many.
 
 #### One-to-One references
 
 One to one referene is the case when a document contains as a link a single id to different document. For example VM may contain cluster id or a cluster may in turn contain storage domain id.
+When querying one-to-one references the field containing the id of linked document will be prefixed by `@`.
 
 Example dataset:
 
@@ -229,9 +228,7 @@ Cluster
         "id": "44c687d0-0ac5-4e2d-b17b-9cff5681f7b1",
         "name": "Default",
         "version": "3.6",
-        "_links": {
-            "data_center": "00000001-0001-0001-0001-0000000002bb"
-        }
+        "data_center": "00000001-0001-0001-0001-0000000002bb"
     }
 
 VM
@@ -241,9 +238,7 @@ VM
         "id": "1963c0f2-2490-4810-a66f-0e76d81ebea2",
         "name": "vm1",
         "status": "up",
-        "_links": {
-            "cluster": "44c687d0-0ac5-4e2d-b17b-9cff5681f7b1"
-        }
+        "cluster": "44c687d0-0ac5-4e2d-b17b-9cff5681f7b1"
     }
 
 The simplest case is when we want to query individual fields from referenced documents, for example to get all VMs with names of cluster and cluster's data center.
@@ -272,9 +267,7 @@ will return
         "id": "1963c0f2-2490-4810-a66f-0e76d81ebea2",
         "name": "vm1",
         "status": "up",
-        "_links": {
-            "cluster": "44c687d0-0ac5-4e2d-b17b-9cff5681f7b1"
-        },
+        "cluster": "44c687d0-0ac5-4e2d-b17b-9cff5681f7b1"
         "@cluster.name": "Default"
     }
 
@@ -293,9 +286,7 @@ will return
             "id": "44c687d0-0ac5-4e2d-b17b-9cff5681f7b1",
             "name": "Default",
             "version": "3.6",
-            "_links": {
-                "data_center": "00000001-0001-0001-0001-0000000002bb"
-            }
+            "data_center": "00000001-0001-0001-0001-0000000002bb"
         }
     }]
 
@@ -319,7 +310,8 @@ Inside the `( )` one can specify a comma separated list of selectors (that will 
 #### One-to-Many references
 
 The other type of supported relationship is One-To-Many. One-To-Many relationship may arise in two ways. First case is that document directly contains array of ID's
-in its `_links` object (can be seen in very first example of VM document). The second case arises when multiple documents have same One-to-One reference to same
+in its field named after singular form of the linked collection (can be seen in very first example of VM document - disk).
+The second case arises when multiple documents have same One-to-One reference to same
 document. For example when multiple VMs point to same Cluster document, we may query the Cluster's VMs.
 
 In both cases the syntax is the same: `@[<referenced_name>]`. Notice the additional `[ ]` around the reference name compared to one-to-one references. Example:
@@ -335,9 +327,7 @@ will return:
             "id": "1963c0f2-2490-4810-a66f-0e76d81ebea2",
             "name": "vm1",
             "status": "up",
-            "_links": {
-                "cluster": "44c687d0-0ac5-4e2d-b17b-9cff5681f7b1"
-            }
+            "cluster": "44c687d0-0ac5-4e2d-b17b-9cff5681f7b1"
         }]
     }]
 
@@ -378,16 +368,12 @@ But first let's create the missing disks:
         "id": 1,
         "name": "My Disk 1",
         "size": 1024,
-        "_links": {
-            "vm": "1963c0f2-2490-4810-a66f-0e76d81ebea2"
-        }
+        "vm": "1963c0f2-2490-4810-a66f-0e76d81ebea2"
     }, {
         "id": 2,
         "name": "My Disk 2",
         "size": 2048,
-        "_links": {
-            "vm": "1963c0f2-2490-4810-a66f-0e76d81ebea2"
-        }
+        "vm": "1963c0f2-2490-4810-a66f-0e76d81ebea2"
     }]
 
 and now

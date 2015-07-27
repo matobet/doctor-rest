@@ -2,9 +2,11 @@ FROM iojs:latest
 
 MAINTAINER Martin Betak <matobet@gmail.com>
 
-COPY lib /
-COPY package.json /
+COPY lib /src/lib/
+COPY package.json /src/
+
+WORKDIR /src
 
 RUN npm install
 
-CMD npm start
+ENTRYPOINT npm start

@@ -400,6 +400,74 @@ describe('Query Language', () => {
     });
   });
 
+  describe("orderBy", () => {
+
+    it('should support basic sorting of documents', function *() {
+
+      yield rest.setup({
+        vm: [
+          { id: '1', name: 'Z' },
+          { id: '2', name: 'x' },
+          { id: '3', name: 'W' },
+          { id: '4', name: 'Y' },
+          { id: '5', name: 's' }
+        ]
+      });
+
+      let query = {
+        select: 'name',
+        orderBy: 'name'
+      };
+      let res = yield get({url: `/entities/vm?q=${JSON.stringify(query)}`});
+      expect(res.body).to.eql([
+        { name: 'W' },
+        { name: 'Y' },
+        { name: 'Z' },
+        { name: 's' },
+        { name: 'x' }
+      ]);
+
+      query = {
+        select: 'id',
+        orderBy: '-id'
+      };
+
+      res = yield get({url: `/entities/vm?q=${JSON.stringify(query)}`});
+      expect(res.body).to.eql([
+        { id: '5' },
+        { id: '4' },
+        { id: '3' },
+        { id: '2' },
+        { id: '1' }
+      ]);
+    });
+
+    it('should support sorting by multiple fields', function *() {
+      yield rest.setup({
+        vm: [
+          { id: '5', name: 'C' },
+          { id: '2', name: 'A' },
+          { id: '4', name: 'B' },
+          { id: '1', name: 'A' },
+          { id: '3', name: 'B' }
+        ]
+      });
+
+      let query = {
+        orderBy: ['name', '-id']
+      };
+
+      let res = yield get({url: `/entities/vm?q=${JSON.stringify(query)}`});
+      expect(res.body).to.eql([
+        { id: '2', name: 'A'},
+        { id: '1', name: 'A'},
+        { id: '4', name: 'B'},
+        { id: '3', name: 'B'},
+        { id: '5', name: 'C'}
+      ]);
+    });
+  });
+
   describe("limit & skip", () => {
 
     it('should support basic pagination', function *() {

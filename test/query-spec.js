@@ -12,7 +12,7 @@ describe('Query Language', () => {
     yield db.clear('vm', 'cluster', 'data_center', 'system', 'disk', 'storage');
   });
 
-  describe("select", () => {
+  describe('select', () => {
 
     it('should enable to query selected fields', function *() {
       yield rest.setup({vm: {
@@ -400,7 +400,12 @@ describe('Query Language', () => {
     });
   });
 
-  describe("orderBy", () => {
+  describe('where', () => {
+
+    // TODO: write tests for filtering
+  });
+
+  describe('orderBy', () => {
 
     it('should support basic sorting of documents', function *() {
 
@@ -468,7 +473,7 @@ describe('Query Language', () => {
     });
   });
 
-  describe("limit & skip", () => {
+  describe('limit & skip', () => {
 
     it('should support basic pagination', function *() {
 

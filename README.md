@@ -34,6 +34,7 @@ reasonable default values.
 * MONGO_MAIN_DB - mongo database to be used
 * API_PORT - port for Doctor REST API
 * MQTT_PORT - port for embedded MQTT broker
+* CLUSTERED - fork worker process per each CPU core [0|1] default 0
 
 ## Main Concepts
 * **Document**  a thing (JSON document) of value that will be stored and diffed by Doctor

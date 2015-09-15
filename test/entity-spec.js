@@ -119,6 +119,31 @@ describe('Entity Collections', () => {
       yield patch({url: '/entities/vm/big', payload: {id: "new_id", name: "whatever"}, status: 400});
     });
 
+    it("'null' should remove given field from document", function *() {
+      yield rest.setup({
+        vm: {
+          id: '1',
+          name: 'foo',
+          old_field: 42
+        }
+      });
+
+      yield patch({url: '/entities/vm/1', payload: {old_field: null}});
+
+      let res = yield get({url: '/entities/vm/1'});
+      expect(res.body).to.eql({
+        id: '1',
+        name: 'foo'
+      });
+    });
+
+    it('empty patch should result in no-op', function *() {
+      yield rest.setup({vm: PAYLOAD2});
+      yield patch({url: '/entities/vm/big', payload: {}});
+
+      let res = yield get({url: '/entities/vm/big'});
+      expect(res.body).to.eql(PAYLOAD2);
+    });
   });
 
   describe('PUT', () => {

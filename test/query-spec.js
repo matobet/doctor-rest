@@ -398,6 +398,23 @@ describe('Query Language', () => {
         { '@[disk].@storage': [{name: bigStorage.name}] }
       ]);
     });
+
+    it('should resolve multiple array references', function *() {
+      yield rest.setup({
+        vm: {
+          id: 1,
+          name: 'myVm'
+        }
+      });
+
+      let res = yield get({url: '/entities/vm/1', payload: {select: ['*', '@[foo]', '@[bar]']}});
+      expect(res.body).to.eql({
+        id: '1',
+        name: 'myVm',
+        '@[foo]': [],
+        '@[bar]': []
+      });
+    });
   });
 
   describe('where', () => {

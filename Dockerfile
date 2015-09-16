@@ -1,4 +1,4 @@
-FROM iojs:latest
+FROM node:latest
 
 MAINTAINER Martin Betak <matobet@gmail.com>
 

@@ -1,6 +1,7 @@
 # Doctor Rest
 [![Build Status](https://travis-ci.org/matobet/doctor-rest.svg?branch=master)](https://travis-ci.org/matobet/doctor-rest)
 [![Coverage Status](https://coveralls.io/repos/matobet/doctor-rest/badge.svg?branch=master&service=github&github_cache=suxx)](https://coveralls.io/github/matobet/doctor-rest?branch=master)
+![Dependency Status](https://david-dm.org/matobet/doctor-rest.svg)
 
 Generic proxy for REST-ful APIs with custom query language and MQTT push notifications.
 

@@ -1,9 +1,9 @@
 'use strict'
 
-var app = require('../../lib/index')
 var config = require('../../lib/config')
 var _ = require('lodash')
-var request = require('co-supertest').agent(app.listen())
+var server = require('../../lib/index')
+var request = require('co-supertest')(server)
 
 function get (options) {
   let url = options.url

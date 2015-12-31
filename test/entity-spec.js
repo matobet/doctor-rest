@@ -173,6 +173,14 @@ describe('Entity Collections', () => {
       expect(res.body).to.eql(documents)
     })
 
+    it('should delete entire collection when passed []', function *() {
+      yield post({url: '/entities/vm', payload})
+      yield put({url: '/entities/vm', payload: []})
+
+      let res = yield get({url: '/entities/vm'})
+      expect(res.body).to.be.empty
+    })
+
     it('should validate id presence on collection replace', function *() {
       const documents = [{name: 'not enough'}]
       yield put({url: '/entities/vm', payload: documents, status: 400})

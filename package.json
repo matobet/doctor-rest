@@ -5,7 +5,7 @@
   "main": "lib/index.js",
   "scripts": {
     "start": "node lib/index.js",
-    "lint": "./node_modules/jshint/bin/jshint lib test",
+    "lint": "./node_modules/jshint/bin/jshint lib test && ./node_modules/standard/bin/cmd.js",
     "test": "SECRET=much MONGO_MAIN_DB=doctor_test PORT_OFFSET=1 mocha -G --require co-mocha",
     "pretest": "npm run lint",
     "forever": "./node_modules/nodemon/bin/nodemon.js --exec npm start",
@@ -48,6 +48,10 @@
     "mqtt": "^1.6.3",
     "nodemon": "^1.8.1",
     "proxyquire": "^1.7.3",
+    "standard": "^5.4.1",
     "supertest": "^1.1.0"
+  },
+  "standard": {
+    "globals": ["describe", "it", "should", "before", "after", "beforeEach", "afterEach"]
   }
 }

@@ -1,70 +1,71 @@
-'use strict';
+'use strict'
 
 var expect = require('chai').expect
-  , mqtt = require('mqtt')
-  , config = require('../../lib/config')
-  , client = mqtt.connect(`mqtt://localhost:${config.MQTT_PORT}`)
-  ;
+var mqtt = require('mqtt')
+var config = require('../../lib/config')
+var client = mqtt.connect(`mqtt://localhost:${config.MQTT_PORT}`)
 
-var expected = [], index = 0, over = false;
-var waitMessages, resolver, rejector;
+var expected = []
+var index = 0
+var over = false
+var waitMessages, resolver, rejector
 
-function reset() {
-  expected = [];
-  index = 0;
-  over = false;
+function reset () {
+  expected = []
+  index = 0
+  over = false
   waitMessages = new Promise((resolve, reject) => {
-    resolver = resolve;
-    rejector = reject;
-  });
+    resolver = resolve
+    rejector = reject
+  })
 }
 
-function checkTestOver() {
-  if (index == expected.length && over) {
-    resolver();
+function checkTestOver () {
+  if (index === expected.length && over) {
+    resolver()
   }
 }
 
-function messageReceived(topic, message) {
-  console.log('mqtt arrived: ' + topic + '; ' + message);
+function messageReceived (topic, message) {
+  console.log('mqtt arrived: ' + topic + '; ' + message)
   if (index >= expected.length) {
-    rejector();
-    throw new Error('Unexpected message received on topic: ' + topic.toString() + ': ' + message.toString());
+    rejector()
+    throw new Error('Unexpected message received on topic: ' + topic.toString() + ': ' + message.toString())
   }
-  const current = expected[index++];
-  current.topic && expect(topic.toString()).to.eql(current.topic);
-  current.message && expect(message.toString()).to.eql(current.message);
+  const current = expected[index++]
+  current.topic && expect(topic.toString()).to.eql(current.topic)
+  current.message && expect(message.toString()).to.eql(current.message)
 
-  checkTestOver();
+  checkTestOver()
 }
 
-function expectMessage(topic, message) {
-  expected.push({topic, message});
+function expectMessage (topic, message) {
+  expected.push({topic, message})
 }
 
-function pushSetup() {
+function pushSetup () {
   before(() => {
-    client.subscribe('#');
-    client.on('message', messageReceived);
-  });
+    client.subscribe('#')
+    client.on('message', messageReceived)
+  })
 
   after(() => {
-    client.end();
-  });
+    client.end()
+  })
 
   beforeEach(() => {
-    reset();
-  });
+    reset()
+  })
 }
 
-function wait() {
-  over = true;
-  checkTestOver();
-  return waitMessages;
+function wait () {
+  over = true
+  checkTestOver()
+  return waitMessages
 }
 
 module.exports = {
   setup: pushSetup,
   expect: expectMessage,
   wait: wait
-};
+}

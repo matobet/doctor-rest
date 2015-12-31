@@ -10,6 +10,13 @@ describe('Auth', () => {
     expext(res).to.be.undefined
   })
 
+  it("should fail when plugin specified in 'AUTH' does not exist", function *() {
+    let res = yield auth({
+      auth: 'auth_plugin_that_most_likely_does_not_exist'
+    })
+    expext(res).to.be.undefined
+  })
+
   it("should use auth plugin specified in 'AUTH' header", function *() {
     let auth = withAuthPlugins({
       myplugin () {

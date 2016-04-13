@@ -20,10 +20,8 @@ function reset () {
   })
 }
 
-function checkTestOver () {
-  if (index === expected.length && over) {
-    resolver()
-  }
+function expectMessage (topic, message) {
+  expected.push({topic, message})
 }
 
 function messageReceived (topic, message) {
@@ -39,14 +37,19 @@ function messageReceived (topic, message) {
   checkTestOver()
 }
 
-function expectMessage (topic, message) {
-  expected.push({topic, message})
+function checkTestOver () {
+  console.log(`Checking end condition: Index: ${index}, Expected length: ${expected.length} over: ${over}`)
+  if (index === expected.length && over) {
+    resolver()
+  }
 }
 
 function pushSetup () {
-  before(() => {
-    client.subscribe('#')
-    client.on('message', messageReceived)
+  before((done) => {
+    client.subscribe('#', () => {
+      client.on('message', messageReceived)
+      done()
+    })
   })
 
   after(() => {

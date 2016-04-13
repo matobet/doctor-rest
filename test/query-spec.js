@@ -6,12 +6,12 @@ var rest = require('./utils/rest')
 var get = rest.get
 
 describe('Query Language', () => {
-  beforeEach(function *() {
+  beforeEach(function * () {
     yield db.clear('vm', 'cluster', 'data_center', 'system', 'disk', 'storage')
   })
 
   describe('select', () => {
-    it('should enable to query selected fields', function *() {
+    it('should enable to query selected fields', function * () {
       yield rest.setup({vm: {
         id: 123,
         a: 'foo',
@@ -27,7 +27,7 @@ describe('Query Language', () => {
       expect(res.body.c).to.be.undefined
     })
 
-    it('should return filtered query for entire collection', function *() {
+    it('should return filtered query for entire collection', function * () {
       const vms = [
         {id: 1, name: 'vm_1', status: 'up'},
         {id: 2, name: 'vm_2', status: 'up'},
@@ -45,7 +45,7 @@ describe('Query Language', () => {
       })
     })
 
-    it('should enable to query fields of linked documents', function *() {
+    it('should enable to query fields of linked documents', function * () {
       const vm = {
         id: 123,
         name: 'my_vm',
@@ -67,7 +67,7 @@ describe('Query Language', () => {
       })
     })
 
-    it('should support embedding of linked objects', function *() {
+    it('should support embedding of linked objects', function * () {
       const vm = {
         id: 123,
         name: 'my_vm',
@@ -89,7 +89,7 @@ describe('Query Language', () => {
       expect(res.body['@cluster'].name).to.equal(cluster.name)
     })
 
-    it('should enable to query fields of linked documents for entire collections', function *() {
+    it('should enable to query fields of linked documents for entire collections', function * () {
       const vms = [{
         id: 123,
         name: 'my_vm',
@@ -127,7 +127,7 @@ describe('Query Language', () => {
       }
     })
 
-    it('should support query string for selection', function *() {
+    it('should support query string for selection', function * () {
       const vms = [{
         id: 123,
         name: 'my_vm',
@@ -166,11 +166,11 @@ describe('Query Language', () => {
       }
     })
 
-    it('should return 400 on bad query', function *() {
+    it('should return 400 on bad query', function * () {
       yield get({url: '/entities/vm?q=Not entirely: JSON', status: 400})
     })
 
-    it('should be able to resolve nested references', function *() {
+    it('should be able to resolve nested references', function * () {
       yield rest.setup({
         vm: {
           id: 1,
@@ -218,7 +218,7 @@ describe('Query Language', () => {
       })
     })
 
-    it('should support "0" as link value', function *() {
+    it('should support "0" as link value', function * () {
       yield rest.setup({
         vm: {
           id: 1,
@@ -236,7 +236,7 @@ describe('Query Language', () => {
       })
     })
 
-    it('should support nested projections', function *() {
+    it('should support nested projections', function * () {
       yield rest.setup({
         vm: {
           id: 1,
@@ -267,7 +267,7 @@ describe('Query Language', () => {
       })
     })
 
-    it('should support wildcard projections', function *() {
+    it('should support wildcard projections', function * () {
       yield rest.setup({
         vm: {
           id: 1,
@@ -281,7 +281,7 @@ describe('Query Language', () => {
       })
     })
 
-    it('should support nested wildcard projections', function *() {
+    it('should support nested wildcard projections', function * () {
       let vm = {
         id: 1,
         name: 'foo',
@@ -300,7 +300,7 @@ describe('Query Language', () => {
       })
     })
 
-    it('should resolve subcollections', function *() {
+    it('should resolve subcollections', function * () {
       let vms = []
       for (let i = 0; i < 3; i++) {
         vms.push({id: i.toString(), name: 'vm' + i, cluster: '1'})
@@ -321,7 +321,7 @@ describe('Query Language', () => {
       })
     })
 
-    it('should resolve subcollections with projections', function *() {
+    it('should resolve subcollections with projections', function * () {
       let vms = []
       for (let i = 0; i < 3; i++) {
         vms.push({id: i.toString(), name: 'vm' + i, cluster: '1'})
@@ -338,18 +338,18 @@ describe('Query Language', () => {
       let res = yield get({url: '/entities/cluster/1', payload: {select: ['name', '@[vm].name']}})
       expect(res.body).to.eql({
         name: 'my cluster',
-        '@[vm].name': vms.map(vm => vm.name)
+        '@[vm].name': vms.map((vm) => vm.name)
       })
 
       res = yield get({url: '/entities/cluster/1', payload: {select: ['@[vm](name)']}})
       expect(res.body).to.eql({
-        '@[vm]': vms.map(vm => {
+        '@[vm]': vms.map((vm) => {
           return {name: vm.name}
         })
       })
     })
 
-    it('should resolve nested references in subcollections', function *() {
+    it('should resolve nested references in subcollections', function * () {
       const bigStorage = {id: '1', name: 'Big storage'}
       const smallStorage = {id: '2', name: 'Small storage'}
       yield rest.setup({
@@ -373,7 +373,7 @@ describe('Query Language', () => {
       ])
     })
 
-    it('should support nested projection in subcollections', function *() {
+    it('should support nested projection in subcollections', function * () {
       const bigStorage = {id: '1', name: 'Big storage'}
       const smallStorage = {id: '2', name: 'Small storage'}
       yield rest.setup({
@@ -397,7 +397,7 @@ describe('Query Language', () => {
       ])
     })
 
-    it('should resolve multiple array references', function *() {
+    it('should resolve multiple array references', function * () {
       yield rest.setup({
         vm: {
           id: 1,
@@ -420,7 +420,7 @@ describe('Query Language', () => {
   })
 
   describe('orderBy', () => {
-    it('should support basic sorting of documents', function *() {
+    it('should support basic sorting of documents', function * () {
       yield rest.setup({
         vm: [
           { id: '1', name: 'Z' },
@@ -459,7 +459,7 @@ describe('Query Language', () => {
       ])
     })
 
-    it('should support sorting by multiple fields', function *() {
+    it('should support sorting by multiple fields', function * () {
       yield rest.setup({
         vm: [
           { id: '5', name: 'C' },
@@ -486,7 +486,7 @@ describe('Query Language', () => {
   })
 
   describe('limit & skip', () => {
-    it('should support basic pagination', function *() {
+    it('should support basic pagination', function * () {
       const vms = [
         { id: '1', name: 'vm 1' },
         { id: '2', name: 'vm 2' },
@@ -509,7 +509,7 @@ describe('Query Language', () => {
       }
     })
 
-    it('should support nested pagination', function *() {
+    it('should support nested pagination', function * () {
       yield rest.setup({
         cluster: {
           id: 1,

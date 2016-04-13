@@ -11,7 +11,7 @@ var remove = rest.remove
 describe('MQTT push notification', function () {
   push.setup()
 
-  beforeEach(function *() {
+  beforeEach(function * () {
     yield db.clear('vm')
   })
 
@@ -25,13 +25,13 @@ describe('MQTT push notification', function () {
     data: 'some content'
   }
 
-  it('should be sent on entity creation', function *() {
+  it('should be sent on entity creation', function * () {
     push.expect('vm/push_message_342', '+')
     yield post({url: '/entities/vm', payload})
     yield push.wait()
   })
 
-  it('should be sent on entity update with changed fields', function *() {
+  it('should be sent on entity update with changed fields', function * () {
     push.expect('vm/push_message_12', '+')
     yield post({url: '/entities/vm', payload: payload2})
     push.expect('vm/push_message_12', 'data')
@@ -39,7 +39,7 @@ describe('MQTT push notification', function () {
     yield push.wait()
   })
 
-  it('should be sent when nested object changes', function *() {
+  it('should be sent when nested object changes', function * () {
     const vm = {
       id: '123',
       data: {
@@ -58,14 +58,14 @@ describe('MQTT push notification', function () {
     yield push.wait()
   })
 
-  it('should not be sent when nothing changes', function *() {
+  it('should not be sent when nothing changes', function * () {
     push.expect('vm/push_message_342', '+')
     yield post({url: '/entities/vm', payload})
     yield put({url: '/entities/vm/push_message_342', payload})
     yield push.wait()
   })
 
-  it('should not be sent when nested object does not change', function *() {
+  it('should not be sent when nested object does not change', function * () {
     const vm = {
       id: '123',
       data: {
@@ -80,7 +80,7 @@ describe('MQTT push notification', function () {
     yield push.wait()
   })
 
-  it('should equal properties in patch update', function *() {
+  it('should equal properties in patch update', function * () {
     push.expect('vm/push_message_342', '+')
     yield post({url: '/entities/vm', payload})
     push.expect('vm/push_message_342', 'data,new_field')
@@ -89,7 +89,7 @@ describe('MQTT push notification', function () {
   })
 
   function * setupVms () {
-    const vms = [1, 2, 3, 4, 5].map(i => {
+    const vms = [1, 2, 3, 4, 5].map((i) => {
       return {
         id: 'id_' + i,
         name: 'name_' + i
@@ -104,7 +104,7 @@ describe('MQTT push notification', function () {
     return vms
   }
 
-  it('should be sent for each updated entity', function *() {
+  it('should be sent for each updated entity', function * () {
     const vms = yield setupVms()
 
     for (let vm of vms) {
@@ -117,7 +117,7 @@ describe('MQTT push notification', function () {
     yield push.wait()
   })
 
-  it('should be sent for each created/updated/deleted entity', function *() {
+  it('should be sent for each created/updated/deleted entity', function * () {
     let vms = yield setupVms()
 
     push.expect('vm/id_6', '+')
@@ -136,7 +136,7 @@ describe('MQTT push notification', function () {
     yield push.wait()
   })
 
-  it('should be sent for single removed entity', function *() {
+  it('should be sent for single removed entity', function * () {
     push.expect('vm/push_message_342', '+')
     yield post({url: '/entities/vm', payload})
     push.expect('vm/push_message_342', '-')
@@ -145,7 +145,7 @@ describe('MQTT push notification', function () {
     yield push.wait()
   })
 
-  it('should be sent for each removed entity', function *() {
+  it('should be sent for each removed entity', function * () {
     const vms = yield setupVms()
     for (let vm of vms) {
       push.expect('vm/' + vm.id, '-')
@@ -156,7 +156,7 @@ describe('MQTT push notification', function () {
   })
 
   // this test should be last
-  it('should not send any extra messages', function *() {
+  it('should not send any extra messages', function * () {
     yield push.wait()
   })
 })

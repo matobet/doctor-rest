@@ -1,0 +1,4491 @@
+From f06165f1245690d7cd27cc1127f6449253cffc1d Mon Sep 17 00:00:00 2001
+From: Martin Betak <mbetak@redhat.com>
+Date: Sun, 15 Feb 2015 22:46:56 +0100
+Subject: [PATCH] push: [DRAFT] Add basic support for MQTT push messages
+
+---
+ moVirt/build.gradle                                |   4 +
+ moVirt/src/main/AndroidManifest.xml                |  11 +
+ .../java/org/ovirt/mobile/movirt/Broadcasts.java   |  10 +
+ .../java/org/ovirt/mobile/movirt/MoVirtApp.java    |   1 -
+ .../mobile/movirt/auth/MovirtAuthenticator.java    |  20 +-
+ .../ovirt/mobile/movirt/facade/EntityFacade.java   |   5 +-
+ .../org/ovirt/mobile/movirt/facade/HostFacade.java |   5 +-
+ .../org/ovirt/mobile/movirt/facade/VmFacade.java   |   4 +-
+ .../ovirt/mobile/movirt/mqtt/AlarmPingSender.java  |  72 +++
+ .../org/ovirt/mobile/movirt/mqtt/MqttReceiver.java |  30 ++
+ .../org/ovirt/mobile/movirt/mqtt/MqttService.java  | 145 ++++++
+ .../ovirt/mobile/movirt/mqtt/PushDispatcher.java   | 117 +++++
+ .../java/org/ovirt/mobile/movirt/rest/Action.java  |   7 -
+ .../org/ovirt/mobile/movirt/rest/ActionTicket.java |  18 -
+ .../java/org/ovirt/mobile/movirt/rest/Cluster.java |  27 -
+ .../org/ovirt/mobile/movirt/rest/Clusters.java     |   7 -
+ .../java/org/ovirt/mobile/movirt/rest/Disk.java    |  18 -
+ .../java/org/ovirt/mobile/movirt/rest/Disks.java   |  10 -
+ .../org/ovirt/mobile/movirt/rest/EmptyResult.java  |   7 -
+ .../org/ovirt/mobile/movirt/rest/ErrorBody.java    |  16 -
+ .../java/org/ovirt/mobile/movirt/rest/Event.java   |  41 --
+ .../java/org/ovirt/mobile/movirt/rest/Events.java  |   7 -
+ .../java/org/ovirt/mobile/movirt/rest/Host.java    |  28 --
+ .../java/org/ovirt/mobile/movirt/rest/Hosts.java   |   7 -
+ .../java/org/ovirt/mobile/movirt/rest/Nic.java     |  21 -
+ .../java/org/ovirt/mobile/movirt/rest/Nics.java    |  10 -
+ .../mobile/movirt/rest/NullHostnameVerifier.java   |  21 -
+ .../org/ovirt/mobile/movirt/rest/OVirtClient.java  | 555 ---------------------
+ .../ovirt/mobile/movirt/rest/OVirtRestClient.java  |  77 ---
+ .../rest/OvirtSimpleClientHttpRequestFactory.java  |  97 ----
+ .../mobile/movirt/rest/RestEntityWrapper.java      |   5 -
+ .../org/ovirt/mobile/movirt/rest/Statistic.java    |  20 -
+ .../org/ovirt/mobile/movirt/rest/Statistics.java   |   7 -
+ .../java/org/ovirt/mobile/movirt/rest/Status.java  |   9 -
+ .../org/ovirt/mobile/movirt/rest/Topology.java     |  11 -
+ .../main/java/org/ovirt/mobile/movirt/rest/Vm.java | 106 ----
+ .../java/org/ovirt/mobile/movirt/rest/Vms.java     |   7 -
+ .../ovirt/mobile/movirt/sync/ActionStrategy.java   |  15 +
+ .../ovirt/mobile/movirt/sync/BaseSyncStrategy.java |  41 ++
+ .../mobile/movirt/sync/CompositeResponse.java      |  50 ++
+ .../ovirt/mobile/movirt/sync/EventsHandler.java    |   3 +-
+ .../mobile/movirt/sync/NullHostnameVerifier.java   |  21 +
+ .../org/ovirt/mobile/movirt/sync/OVirtClient.java  | 115 +++++
+ .../sync/OvirtSimpleClientHttpRequestFactory.java  |  98 ++++
+ .../java/org/ovirt/mobile/movirt/sync/Request.java |   5 +
+ .../org/ovirt/mobile/movirt/sync/Response.java     |  13 +
+ .../mobile/movirt/sync/RestEntityWrapper.java      |   5 +
+ .../ovirt/mobile/movirt/sync/SimpleResponse.java   |  26 +
+ .../org/ovirt/mobile/movirt/sync/SyncAdapter.java  |  17 +-
+ .../org/ovirt/mobile/movirt/sync/SyncStrategy.java |  28 ++
+ .../org/ovirt/mobile/movirt/sync/SyncUtils.java    |   9 +
+ .../ovirt/mobile/movirt/sync/doctor/Cluster.java   |  25 +
+ .../DoctorFieldSelectHttpRequestInterceptor.java   | 109 ++++
+ .../movirt/sync/doctor/DoctorRestClient.java       |  32 ++
+ .../movirt/sync/doctor/DoctorSyncStrategy.java     | 130 +++++
+ .../org/ovirt/mobile/movirt/sync/doctor/Host.java  |  32 ++
+ .../org/ovirt/mobile/movirt/sync/doctor/Links.java |   8 +
+ .../ovirt/mobile/movirt/sync/doctor/Select.java    |  13 +
+ .../org/ovirt/mobile/movirt/sync/doctor/Vm.java    |  91 ++++
+ .../org/ovirt/mobile/movirt/sync/rest/Action.java  |   7 +
+ .../mobile/movirt/sync/rest/ActionTicket.java      |  18 +
+ .../org/ovirt/mobile/movirt/sync/rest/Cluster.java |  21 +
+ .../ovirt/mobile/movirt/sync/rest/Clusters.java    |   7 +
+ .../org/ovirt/mobile/movirt/sync/rest/Disk.java    |  18 +
+ .../org/ovirt/mobile/movirt/sync/rest/Disks.java   |  10 +
+ .../ovirt/mobile/movirt/sync/rest/EmptyResult.java |   7 +
+ .../ovirt/mobile/movirt/sync/rest/ErrorBody.java   |  16 +
+ .../org/ovirt/mobile/movirt/sync/rest/Event.java   |  43 ++
+ .../org/ovirt/mobile/movirt/sync/rest/Events.java  |   7 +
+ .../org/ovirt/mobile/movirt/sync/rest/Host.java    |  30 ++
+ .../org/ovirt/mobile/movirt/sync/rest/Hosts.java   |   7 +
+ .../org/ovirt/mobile/movirt/sync/rest/Nic.java     |  21 +
+ .../org/ovirt/mobile/movirt/sync/rest/Nics.java    |  10 +
+ .../mobile/movirt/sync/rest/OVirtRestClient.java   |  77 +++
+ .../movirt/sync/rest/OVirtRestSyncStrategy.java    | 456 +++++++++++++++++
+ .../ovirt/mobile/movirt/sync/rest/Statistic.java   |  20 +
+ .../ovirt/mobile/movirt/sync/rest/Statistics.java  |   7 +
+ .../org/ovirt/mobile/movirt/sync/rest/Status.java  |   9 +
+ .../ovirt/mobile/movirt/sync/rest/Topology.java    |  11 +
+ .../java/org/ovirt/mobile/movirt/sync/rest/Vm.java | 108 ++++
+ .../org/ovirt/mobile/movirt/sync/rest/Vms.java     |   7 +
+ .../mobile/movirt/ui/AuthenticatorActivity.java    |  44 +-
+ .../ovirt/mobile/movirt/ui/DiskDetailFragment.java |   4 +-
+ .../ovirt/mobile/movirt/ui/DiskListAdapter.java    |   4 +-
+ .../org/ovirt/mobile/movirt/ui/MainActivity.java   |  13 +-
+ .../ovirt/mobile/movirt/ui/NicDetailFragment.java  |   4 +-
+ .../org/ovirt/mobile/movirt/ui/NicListAdapter.java |   4 +-
+ .../mobile/movirt/ui/ProgressBarResponse.java      |   6 +-
+ .../mobile/movirt/ui/vms/VmDetailActivity.java     |   4 +-
+ .../movirt/ui/vms/VmDetailGeneralFragment.java     |   2 +-
+ .../src/main/res/layout/authenticator_activity.xml |  25 +-
+ moVirt/src/main/res/values/strings.xml             |   3 +
+ 92 files changed, 2301 insertions(+), 1178 deletions(-)
+ create mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/mqtt/AlarmPingSender.java
+ create mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/mqtt/MqttReceiver.java
+ create mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/mqtt/MqttService.java
+ create mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/mqtt/PushDispatcher.java
+ delete mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Action.java
+ delete mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/rest/ActionTicket.java
+ delete mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Cluster.java
+ delete mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Clusters.java
+ delete mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Disk.java
+ delete mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Disks.java
+ delete mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/rest/EmptyResult.java
+ delete mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/rest/ErrorBody.java
+ delete mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Event.java
+ delete mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Events.java
+ delete mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Host.java
+ delete mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Hosts.java
+ delete mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Nic.java
+ delete mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Nics.java
+ delete mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/rest/NullHostnameVerifier.java
+ delete mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/rest/OVirtClient.java
+ delete mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/rest/OVirtRestClient.java
+ delete mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/rest/OvirtSimpleClientHttpRequestFactory.java
+ delete mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/rest/RestEntityWrapper.java
+ delete mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Statistic.java
+ delete mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Statistics.java
+ delete mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Status.java
+ delete mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Topology.java
+ delete mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Vm.java
+ delete mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Vms.java
+ create mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/sync/ActionStrategy.java
+ create mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/sync/BaseSyncStrategy.java
+ create mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/sync/CompositeResponse.java
+ create mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/sync/NullHostnameVerifier.java
+ create mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/sync/OVirtClient.java
+ create mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/sync/OvirtSimpleClientHttpRequestFactory.java
+ create mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/sync/Request.java
+ create mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/sync/Response.java
+ create mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/sync/RestEntityWrapper.java
+ create mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/sync/SimpleResponse.java
+ create mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/sync/SyncStrategy.java
+ create mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/sync/doctor/Cluster.java
+ create mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/sync/doctor/DoctorFieldSelectHttpRequestInterceptor.java
+ create mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/sync/doctor/DoctorRestClient.java
+ create mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/sync/doctor/DoctorSyncStrategy.java
+ create mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/sync/doctor/Host.java
+ create mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/sync/doctor/Links.java
+ create mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/sync/doctor/Select.java
+ create mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/sync/doctor/Vm.java
+ create mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Action.java
+ create mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/ActionTicket.java
+ create mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Cluster.java
+ create mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Clusters.java
+ create mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Disk.java
+ create mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Disks.java
+ create mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/EmptyResult.java
+ create mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/ErrorBody.java
+ create mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Event.java
+ create mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Events.java
+ create mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Host.java
+ create mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Hosts.java
+ create mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Nic.java
+ create mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Nics.java
+ create mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/OVirtRestClient.java
+ create mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/OVirtRestSyncStrategy.java
+ create mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Statistic.java
+ create mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Statistics.java
+ create mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Status.java
+ create mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Topology.java
+ create mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Vm.java
+ create mode 100644 moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Vms.java
+
+diff --git a/moVirt/build.gradle b/moVirt/build.gradle
+index 5b011b8..1ac6fad 100644
+--- a/moVirt/build.gradle
++++ b/moVirt/build.gradle
+@@ -15,6 +15,9 @@ repositories {
+     maven {
+         url 'https://oss.sonatype.org/content/repositories/snapshots/'
+     }
++    maven {
++        url 'https://repo.eclipse.org/content/repositories/paho-releases/'
++    }
+ }
+ 
+ apply plugin: 'android-apt'
+@@ -28,6 +31,7 @@ dependencies {
+     compile 'com.fasterxml.jackson.core:jackson-core:+'
+     compile 'com.fasterxml.jackson.core:jackson-databind:+'
+     compile 'com.fasterxml.jackson.core:jackson-annotations:+'
++    compile 'org.eclipse.paho:org.eclipse.paho.client.mqttv3:1.0.1'
+     apt "org.androidannotations:androidannotations:$androidAnnottationVersion"
+     compile "org.androidannotations:androidannotations-api:$androidAnnottationVersion"
+ }
+diff --git a/moVirt/src/main/AndroidManifest.xml b/moVirt/src/main/AndroidManifest.xml
+index 6fd2426..75a4887 100644
+--- a/moVirt/src/main/AndroidManifest.xml
++++ b/moVirt/src/main/AndroidManifest.xml
+@@ -71,6 +71,17 @@
+                 android:resource="@xml/sync_adapter" />
+         </service>
+ 
++        <service
++            android:name=".mqtt.MqttService_"
++            android:enabled="true"
++            android:exported="true">
++
++        </service>
++        
++        <receiver android:name=".mqtt.MqttReceiver_">
++
++        </receiver>
++
+         <activity
+             android:name="org.ovirt.mobile.movirt.ui.triggers.EditTriggersActivity_"
+             android:label="@string/title_activity_edit_filters" >
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/Broadcasts.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/Broadcasts.java
+index 8dd5d35..0fe8c59 100644
+--- a/moVirt/src/main/java/org/ovirt/mobile/movirt/Broadcasts.java
++++ b/moVirt/src/main/java/org/ovirt/mobile/movirt/Broadcasts.java
+@@ -8,9 +8,19 @@
+     String REST_REQUEST_FAILED = "org.ovirt.mobile.movirt.REST_REQUEST_FAILED";
+     String NO_CONNECTION_SPEFICIED = "org.ovirt.mobile.movirt.NO_CONNECTION_SPEFICIED";
+ 
++    String REFRESH_TRIGGERED = "org.ovirt.mobile.movirt.REFRESH_TRIGGERED";
++
++    // push notifications
++    String MQTT_CONNECTED = "org.ovirt.mobile.movirt.MQTT_CONNECTED";
++    String MQTT_DISCONNECTED = "org.ovirt.mobile.movirt.MQTT_DISCONNECTED";
++    String VMS_UPDATED = "org.ovirt.mobile.movirt.VMS_UPDATED";
++    String HOSTS_UPDATED = "org.ovirt.mobile.movirt.HOSTS_UPDATED";
++    String EVENTS_UPDATED = "org.ovirt.mobile.movirt.EVENTS_UPDATED";
+ 
+     public interface Extras {
+         String CONNECTION_FAILURE_REASON = "org.ovirt.mobile.movirt.CONNECTION_FAILURE_REASON";
+         String SYNCING = "org.ovirt.mobile.movirt.SYNCING";
++        String ID = "org.ovirt.mobile.movirt.ID";
++        String CHANGED_FIELDS = "org.ovirt.mobile.movirt.CHANGED_FIELDS";
+     }
+ }
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/MoVirtApp.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/MoVirtApp.java
+index 367f7c1..d6de717 100644
+--- a/moVirt/src/main/java/org/ovirt/mobile/movirt/MoVirtApp.java
++++ b/moVirt/src/main/java/org/ovirt/mobile/movirt/MoVirtApp.java
+@@ -20,5 +20,4 @@ public void onCreate() {
+         super.onCreate();
+         context = this;
+     }
+-
+ }
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/auth/MovirtAuthenticator.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/auth/MovirtAuthenticator.java
+index 1a38159..0f349d4 100644
+--- a/moVirt/src/main/java/org/ovirt/mobile/movirt/auth/MovirtAuthenticator.java
++++ b/moVirt/src/main/java/org/ovirt/mobile/movirt/auth/MovirtAuthenticator.java
+@@ -15,7 +15,7 @@
+ import org.androidannotations.annotations.EBean;
+ import org.androidannotations.annotations.SystemService;
+ import org.androidannotations.annotations.UiThread;
+-import org.ovirt.mobile.movirt.rest.OVirtClient;
++import org.ovirt.mobile.movirt.sync.OVirtClient;
+ import org.ovirt.mobile.movirt.ui.AuthenticatorActivity_;
+ 
+ 
+@@ -38,6 +38,12 @@
+ 
+     public static final String ENFORCE_HTTP_BASIC = "org.ovirt.mobile.movirt.enforceHttpBasic";
+ 
++    public static final String USE_DOCTOR_REST = "org.ovirt.mobile.movirt.useDoctorRest";
++
++    public static final String DOCTOR_REST_URL = "org.ovirt.mobile.movirt.doctorRestUrl";
++
++    public static final String DOCTOR_MQTT_URL = "org.ovirt.mobile.movirt.doctorMqttUrl";
++
+     public static final Account MOVIRT_ACCOUNT = new Account(MovirtAuthenticator.ACCOUNT_NAME, MovirtAuthenticator.ACCOUNT_TYPE);
+ 
+     @Bean
+@@ -151,6 +157,18 @@ public Boolean enforceBasicAuth() {
+         return read(ENFORCE_HTTP_BASIC, false);
+     }
+ 
++    public Boolean useDoctorRest() {
++        return read(USE_DOCTOR_REST, false);
++    }
++
++    public String getDoctorRestUrl() {
++        return read(DOCTOR_REST_URL);
++    }
++
++    public String getDoctorMqttUrl() {
++        return read(DOCTOR_MQTT_URL);
++    }
++
+     public boolean accountConfigured() {
+         return accountManager.getAccountsByType(ACCOUNT_TYPE).length > 0;
+     }
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/facade/EntityFacade.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/facade/EntityFacade.java
+index 499f811..1fb839c 100644
+--- a/moVirt/src/main/java/org/ovirt/mobile/movirt/facade/EntityFacade.java
++++ b/moVirt/src/main/java/org/ovirt/mobile/movirt/facade/EntityFacade.java
+@@ -6,7 +6,8 @@
+ 
+ import org.ovirt.mobile.movirt.model.OVirtEntity;
+ import org.ovirt.mobile.movirt.model.trigger.TriggerResolver;
+-import org.ovirt.mobile.movirt.rest.OVirtClient;
++import org.ovirt.mobile.movirt.sync.OVirtClient;
++import org.ovirt.mobile.movirt.sync.Response;
+ 
+ /**
+  * Provides uniform interface for various services dependant on entity type
+@@ -18,5 +19,5 @@
+ 
+     Intent getDetailIntent(E entity, Context context);
+ 
+-    void sync(String id, OVirtClient.Response<E> response);
++    void sync(String id, Response<E> response);
+ }
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/facade/HostFacade.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/facade/HostFacade.java
+index 786ed2d..9508925 100644
+--- a/moVirt/src/main/java/org/ovirt/mobile/movirt/facade/HostFacade.java
++++ b/moVirt/src/main/java/org/ovirt/mobile/movirt/facade/HostFacade.java
+@@ -10,7 +10,8 @@
+ import org.ovirt.mobile.movirt.model.Host;
+ import org.ovirt.mobile.movirt.model.trigger.HostTriggerResolver;
+ import org.ovirt.mobile.movirt.model.trigger.Trigger;
+-import org.ovirt.mobile.movirt.rest.OVirtClient;
++import org.ovirt.mobile.movirt.sync.OVirtClient;
++import org.ovirt.mobile.movirt.sync.Response;
+ import org.ovirt.mobile.movirt.sync.SyncAdapter;
+ import org.ovirt.mobile.movirt.ui.hosts.HostDetailActivity_;
+ 
+@@ -43,7 +44,7 @@ public Intent getDetailIntent(Host entity, Context context) {
+     }
+ 
+     @Override
+-    public void sync(String id, OVirtClient.Response<Host> response) {
++    public void sync(String id, Response<Host> response) {
+         syncAdapter.syncHost(id, response);
+     }
+ }
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/facade/VmFacade.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/facade/VmFacade.java
+index fabf7ea..018bcb4 100644
+--- a/moVirt/src/main/java/org/ovirt/mobile/movirt/facade/VmFacade.java
++++ b/moVirt/src/main/java/org/ovirt/mobile/movirt/facade/VmFacade.java
+@@ -10,7 +10,7 @@
+ import org.ovirt.mobile.movirt.model.Vm;
+ import org.ovirt.mobile.movirt.model.trigger.Trigger;
+ import org.ovirt.mobile.movirt.model.trigger.VmTriggerResolver;
+-import org.ovirt.mobile.movirt.rest.OVirtClient;
++import org.ovirt.mobile.movirt.sync.Response;
+ import org.ovirt.mobile.movirt.sync.SyncAdapter;
+ import org.ovirt.mobile.movirt.ui.vms.VmDetailActivity_;
+ 
+@@ -43,7 +43,7 @@ public Intent getDetailIntent(Vm entity, Context context) {
+     }
+ 
+     @Override
+-    public void sync(String id, OVirtClient.Response<Vm> response) {
++    public void sync(String id, Response<Vm> response) {
+         syncAdapter.syncVm(id, response);
+     }
+ }
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/mqtt/AlarmPingSender.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/mqtt/AlarmPingSender.java
+new file mode 100644
+index 0000000..fbe710f
+--- /dev/null
++++ b/moVirt/src/main/java/org/ovirt/mobile/movirt/mqtt/AlarmPingSender.java
+@@ -0,0 +1,72 @@
++package org.ovirt.mobile.movirt.mqtt;
++
++import android.app.AlarmManager;
++import android.app.PendingIntent;
++import android.content.BroadcastReceiver;
++import android.content.Context;
++import android.content.Intent;
++import android.content.IntentFilter;
++import android.util.Log;
++
++import org.androidannotations.annotations.EBean;
++import org.androidannotations.annotations.RootContext;
++import org.androidannotations.annotations.SystemService;
++import org.eclipse.paho.client.mqttv3.MqttPingSender;
++import org.eclipse.paho.client.mqttv3.internal.ClientComms;
++
++@EBean
++public class AlarmPingSender implements MqttPingSender {
++
++    public static final String TAG = AlarmPingSender.class.getSimpleName();
++
++    private static final String PING = "org.ovirt.mobile.movirt.PING";
++
++    @RootContext
++    Context context;
++
++    @SystemService
++    AlarmManager alarmManager;
++
++    private BroadcastReceiver alarmReceiver = new BroadcastReceiver() {
++
++        @Override
++        public void onReceive(Context context, Intent intent) {
++            Log.i(TAG, "Sending MQTT Ping Request");
++            clientComms.checkForActivity();
++        }
++    };
++
++    private ClientComms clientComms;
++    private PendingIntent pendingIntent;
++
++    @Override
++    public void init(ClientComms clientComms) {
++        this.clientComms = clientComms;
++    }
++
++    @Override
++    public void start() {
++        try {
++            context.registerReceiver(alarmReceiver, new IntentFilter(PING));
++            pendingIntent = PendingIntent.getBroadcast(context, 0, new Intent(PING), PendingIntent.FLAG_UPDATE_CURRENT);
++            schedule(clientComms.getKeepAlive());
++        } catch (Exception e) {
++            // ignore exceptions in case of race when connection was lost before start() was called
++        }
++    }
++
++    @Override
++    public void stop() {
++        try {
++            alarmManager.cancel(pendingIntent);
++            context.unregisterReceiver(alarmReceiver);
++        } catch (Exception e) {
++            // ignore unregister exceptions
++        }
++    }
++
++    @Override
++    public void schedule(long delay) {
++        alarmManager.set(AlarmManager.RTC_WAKEUP, System.currentTimeMillis() + delay, pendingIntent);
++    }
++}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/mqtt/MqttReceiver.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/mqtt/MqttReceiver.java
+new file mode 100644
+index 0000000..4ea2914
+--- /dev/null
++++ b/moVirt/src/main/java/org/ovirt/mobile/movirt/mqtt/MqttReceiver.java
+@@ -0,0 +1,30 @@
++package org.ovirt.mobile.movirt.mqtt;
++
++import android.util.Log;
++
++import org.androidannotations.annotations.Bean;
++import org.androidannotations.annotations.EReceiver;
++import org.androidannotations.annotations.ReceiverAction;
++import org.androidannotations.api.support.content.AbstractBroadcastReceiver;
++import org.ovirt.mobile.movirt.Broadcasts;
++import org.ovirt.mobile.movirt.model.Vm;
++import org.ovirt.mobile.movirt.sync.SyncAdapter;
++import org.ovirt.mobile.movirt.sync.SimpleResponse;
++import org.springframework.util.StringUtils;
++
++@EReceiver
++public class MqttReceiver extends AbstractBroadcastReceiver {
++
++    public static final String TAG = MqttReceiver.class.getSimpleName();
++
++    @Bean
++    SyncAdapter syncAdapter;
++
++    @ReceiverAction(Broadcasts.VMS_UPDATED)
++    void vmUpdated(@ReceiverAction.Extra(Broadcasts.Extras.ID) String id,
++                   @ReceiverAction.Extra(Broadcasts.Extras.CHANGED_FIELDS) String[] fields) {
++        syncAdapter.syncVm(id, new SimpleResponse<Vm>());
++        Log.d(TAG, "Syncing VM " + id + " based on push notification. Changed fields: " +
++                StringUtils.arrayToDelimitedString(fields, ", "));
++    }
++}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/mqtt/MqttService.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/mqtt/MqttService.java
+new file mode 100644
+index 0000000..87921cc
+--- /dev/null
++++ b/moVirt/src/main/java/org/ovirt/mobile/movirt/mqtt/MqttService.java
+@@ -0,0 +1,145 @@
++package org.ovirt.mobile.movirt.mqtt;
++
++import android.app.Service;
++import android.content.Intent;
++import android.net.ConnectivityManager;
++import android.os.IBinder;
++import android.provider.Settings;
++import android.text.TextUtils;
++import android.util.Log;
++
++import org.androidannotations.annotations.AfterInject;
++import org.androidannotations.annotations.Bean;
++import org.androidannotations.annotations.EService;
++import org.androidannotations.annotations.Receiver;
++import org.eclipse.paho.client.mqttv3.IMqttActionListener;
++import org.eclipse.paho.client.mqttv3.IMqttDeliveryToken;
++import org.eclipse.paho.client.mqttv3.IMqttToken;
++import org.eclipse.paho.client.mqttv3.MqttAsyncClient;
++import org.eclipse.paho.client.mqttv3.MqttCallback;
++import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
++import org.eclipse.paho.client.mqttv3.MqttException;
++import org.eclipse.paho.client.mqttv3.MqttMessage;
++import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence;
++import org.ovirt.mobile.movirt.Broadcasts;
++import org.ovirt.mobile.movirt.auth.MovirtAuthenticator;
++
++@EService
++public class MqttService extends Service implements MqttCallback {
++
++    public static final String TAG = MqttService.class.getSimpleName();
++
++    private static final String CLIENT_ID = Settings.Secure.ANDROID_ID;
++    private static final int KEEPALIVE_SECONDS = 15 * 60;
++
++    private static final int QOS_GUARANTEE = 2;
++
++    private MqttAsyncClient client;
++    private volatile boolean connected;
++
++    @Bean
++    AlarmPingSender alarmPingSender;
++
++    @Bean
++    PushDispatcher pushDispatcher;
++
++    @Bean
++    MovirtAuthenticator authenticator;
++
++    @Override
++    public IBinder onBind(Intent intent) {
++        return null;
++    }
++
++    @AfterInject
++    void init() {
++        if (!authenticator.useDoctorRest() || TextUtils.isEmpty(authenticator.getDoctorMqttUrl())) {
++            return;
++        }
++        connect();
++    }
++
++    private synchronized void connect() {
++        Log.i(TAG, "Entering MQTT connect ...");
++        if (client != null && client.isConnected()) {
++            try {
++                client.disconnectForcibly();
++            } catch (MqttException e) {
++                e.printStackTrace();
++            }
++        }
++        try {
++            this.client = new MqttAsyncClient(authenticator.getDoctorMqttUrl(), CLIENT_ID, new MemoryPersistence(), alarmPingSender);
++            this.client.setCallback(this);
++            this.client.connect(getConnectionOptions(), null, new IMqttActionListener() {
++                @Override
++                public void onSuccess(IMqttToken iMqttToken) {
++                    try {
++                        connected = true;
++                        subscribe();
++                        sendBroadcast(new Intent(Broadcasts.MQTT_CONNECTED));
++                        Log.i(TAG, "MQTT Connection successful!");
++                    } catch (MqttException e) {
++                        Log.e(TAG, "Error subscribing to messages!", e);
++                    }
++                }
++
++                @Override
++                public void onFailure(IMqttToken iMqttToken, Throwable e) {
++                    Log.e(TAG, "Error connecting to MQTT broker at: " + authenticator.getDoctorMqttUrl(), e);
++                }
++            });
++        } catch (MqttException e) {
++            Log.e(TAG, "Error connecting to MQTT broker at: " + authenticator.getDoctorMqttUrl(), e);
++        }
++    }
++
++    private synchronized void subscribe() throws MqttException {
++        if (!client.isConnected()) {
++            return;
++        }
++        for (String topic : pushDispatcher.getTopics()) {
++            client.subscribe(topic, QOS_GUARANTEE);
++        }
++    }
++
++    private MqttConnectOptions getConnectionOptions() {
++        MqttConnectOptions options = new MqttConnectOptions();
++        options.setKeepAliveInterval(KEEPALIVE_SECONDS);
++        return options;
++    }
++
++    @Override
++    public synchronized void connectionLost(Throwable throwable) {
++        Log.i(TAG, "MQTT Connection Lost!");
++        connected = false;
++        sendBroadcast(new Intent(Broadcasts.MQTT_DISCONNECTED));
++    }
++
++    @Override
++    public void messageArrived(String topic, MqttMessage mqttMessage) throws Exception {
++        Log.i(TAG, "Message arrived; " + new String(mqttMessage.getPayload()));
++        String message = new String(mqttMessage.getPayload());
++        pushDispatcher.pushReceived(topic, message);
++    }
++
++    @Override
++    public void deliveryComplete(IMqttDeliveryToken iMqttDeliveryToken) {
++    }
++
++    @Receiver(actions = ConnectivityManager.CONNECTIVITY_ACTION)
++    void connectivityChanged(@Receiver.Extra(ConnectivityManager.EXTRA_NO_CONNECTIVITY) boolean noConnectivity) {
++        // try to reconnect if we are not connected and there is at least some connectivity
++        if (!noConnectivity && !connected) {
++            connect();
++        }
++    }
++
++    @Receiver(actions = {Broadcasts.REFRESH_TRIGGERED, Broadcasts.IN_SYNC})
++    synchronized void refresh() {
++        // on explicit refresh try to reconnect
++        if (!connected) {
++            connect();
++        }
++    }
++}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/mqtt/PushDispatcher.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/mqtt/PushDispatcher.java
+new file mode 100644
+index 0000000..79c0a48
+--- /dev/null
++++ b/moVirt/src/main/java/org/ovirt/mobile/movirt/mqtt/PushDispatcher.java
+@@ -0,0 +1,117 @@
++package org.ovirt.mobile.movirt.mqtt;
++
++import android.content.Context;
++import android.util.Log;
++
++import org.androidannotations.annotations.AfterInject;
++import org.androidannotations.annotations.Bean;
++import org.androidannotations.annotations.EBean;
++import org.androidannotations.annotations.RootContext;
++import org.ovirt.mobile.movirt.facade.EntityFacade;
++import org.ovirt.mobile.movirt.facade.HostFacade;
++import org.ovirt.mobile.movirt.facade.VmFacade;
++import org.ovirt.mobile.movirt.model.OVirtEntity;
++import org.ovirt.mobile.movirt.model.Vm;
++import org.ovirt.mobile.movirt.provider.ProviderFacade;
++
++import java.util.ArrayList;
++import java.util.List;
++
++@EBean
++public class PushDispatcher {
++
++    private static final String TAG = PushDispatcher.class.getSimpleName();
++
++    private static final String CREATED_MESSAGE = "+";
++    private static final String REMOVED_MESSAGE = "-";
++
++    private static final String ALL = "/#";
++    private static final String VMS_TOPIC = "vm";
++    private static final String HOSTS_TOPIC = "host";
++    private static final String EVENTS_TOPIC = "event";
++
++    private final List<Updater> updaters = new ArrayList<>();
++
++    @RootContext
++    Context context;
++
++    @Bean
++    ProviderFacade provider;
++
++    @Bean
++    VmFacade vmFacade;
++
++    @Bean
++    HostFacade hostFacade;
++
++    interface Updater {
++        boolean matches(String topic);
++        String getPrefix();
++        void performUpdate(String id, String message);
++    }
++
++    static abstract class BaseUpdater implements Updater {
++
++        protected final String prefix;
++
++        BaseUpdater(String prefix) {
++            this.prefix = prefix;
++        }
++
++        @Override
++        public boolean matches(String topic) {
++            return topic.startsWith(prefix);
++        }
++
++        @Override
++        public String getPrefix() {
++            return prefix;
++        }
++    }
++
++    class EntityUpdater<E extends OVirtEntity> extends BaseUpdater {
++
++        private final EntityFacade<E> facade;
++
++        EntityUpdater(String prefix, EntityFacade<E> facade) {
++            super(prefix);
++            this.facade = facade;
++        }
++
++        public void performUpdate(String id, String message) {
++            switch (message) {
++                case REMOVED_MESSAGE:
++                    provider.deleteAll(Vm.CONTENT_URI.buildUpon().appendPath(id).build());
++                    break;
++                case CREATED_MESSAGE:
++                default:
++                    Log.i(TAG, "Performing update");
++                    facade.sync(id, null);
++                    break;
++            }
++        }
++    }
++
++    @AfterInject
++    void initUpdaters() {
++        updaters.add(new EntityUpdater<>(VMS_TOPIC, vmFacade));
++        updaters.add(new EntityUpdater<>(HOSTS_TOPIC, hostFacade));
++    }
++
++    public void pushReceived(String topic, String message) {
++        for (Updater updater : updaters) {
++            if (updater.matches(topic)) {
++                String id = topic.substring(updater.getPrefix().length() + 1);
++                updater.performUpdate(id, message);
++            }
++        }
++    }
++
++    public List<String> getTopics() {
++        List<String> topics = new ArrayList<>();
++        for (Updater updater : updaters) {
++            topics.add(updater.getPrefix() + ALL);
++        }
++        return topics;
++    }
++}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Action.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Action.java
+deleted file mode 100644
+index 9821dee..0000000
+--- a/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Action.java
++++ /dev/null
+@@ -1,7 +0,0 @@
+-package org.ovirt.mobile.movirt.rest;
+-
+-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+-
+-@JsonIgnoreProperties(ignoreUnknown = true)
+-class Action {
+-}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/ActionTicket.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/ActionTicket.java
+deleted file mode 100644
+index f2bc75b..0000000
+--- a/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/ActionTicket.java
++++ /dev/null
+@@ -1,18 +0,0 @@
+-package org.ovirt.mobile.movirt.rest;
+-
+-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+-import com.fasterxml.jackson.annotation.JsonRootName;
+-
+-/**
+- * Created by sphoorti on 16/1/15.
+- */
+-@JsonRootName("action")
+-@JsonIgnoreProperties(ignoreUnknown = true)
+-public class ActionTicket {
+-    public Ticket ticket;
+-
+-    @JsonIgnoreProperties(ignoreUnknown = true)
+-    public static class Ticket {
+-      public String value;
+-    }
+-}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Cluster.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Cluster.java
+deleted file mode 100644
+index 552f466..0000000
+--- a/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Cluster.java
++++ /dev/null
+@@ -1,27 +0,0 @@
+-package org.ovirt.mobile.movirt.rest;
+-
+-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+-
+-@JsonIgnoreProperties(ignoreUnknown = true)
+-class Cluster implements RestEntityWrapper<org.ovirt.mobile.movirt.model.Cluster> {
+-    // public for json mapping
+-    public String id;
+-    public String name;
+-
+-    public String getId() {
+-        return id;
+-    }
+-
+-    public String getName() {
+-        return name;
+-    }
+-
+-    @Override
+-    public org.ovirt.mobile.movirt.model.Cluster toEntity() {
+-        org.ovirt.mobile.movirt.model.Cluster cluster = new org.ovirt.mobile.movirt.model.Cluster();
+-        cluster.setId(id);
+-        cluster.setName(name);
+-
+-        return cluster;
+-    }
+-}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Clusters.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Clusters.java
+deleted file mode 100644
+index 1104cb2..0000000
+--- a/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Clusters.java
++++ /dev/null
+@@ -1,7 +0,0 @@
+-package org.ovirt.mobile.movirt.rest;
+-
+-import java.util.List;
+-
+-public class Clusters {
+-    public List<Cluster> cluster;
+-}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Disk.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Disk.java
+deleted file mode 100644
+index fd03f9b..0000000
+--- a/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Disk.java
++++ /dev/null
+@@ -1,18 +0,0 @@
+-package org.ovirt.mobile.movirt.rest;
+-
+-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+-
+-/**
+- * Created by sphoorti on 5/2/15.
+- */
+-@JsonIgnoreProperties(ignoreUnknown = true)
+-public class Disk {
+-    public String name;
+-    public String size;
+-    public Status status;
+-
+-    @JsonIgnoreProperties(ignoreUnknown = true)
+-    public class Status {
+-        public String state;
+-    }
+-}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Disks.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Disks.java
+deleted file mode 100644
+index 3a53077..0000000
+--- a/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Disks.java
++++ /dev/null
+@@ -1,10 +0,0 @@
+-package org.ovirt.mobile.movirt.rest;
+-
+-import java.util.List;
+-
+-/**
+- * Created by sphoorti on 9/2/15.
+- */
+-public class Disks {
+-    public List<Disk> disk;
+-}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/EmptyResult.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/EmptyResult.java
+deleted file mode 100644
+index bbd26f0..0000000
+--- a/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/EmptyResult.java
++++ /dev/null
+@@ -1,7 +0,0 @@
+-package org.ovirt.mobile.movirt.rest;
+-
+-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+-
+-@JsonIgnoreProperties(ignoreUnknown = true)
+-public class EmptyResult {
+-}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/ErrorBody.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/ErrorBody.java
+deleted file mode 100644
+index 05605a9..0000000
+--- a/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/ErrorBody.java
++++ /dev/null
+@@ -1,16 +0,0 @@
+-package org.ovirt.mobile.movirt.rest;
+-
+-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+-
+-@JsonIgnoreProperties(ignoreUnknown = true)
+-public class ErrorBody {
+-    public Fault fault;
+-
+-    @JsonIgnoreProperties(ignoreUnknown = true)
+-    public static class Fault {
+-
+-        public String reason;
+-
+-        public String detail;
+-    }
+-}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Event.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Event.java
+deleted file mode 100644
+index 6f42fd8..0000000
+--- a/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Event.java
++++ /dev/null
+@@ -1,41 +0,0 @@
+-package org.ovirt.mobile.movirt.rest;
+-
+-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+-
+-import java.sql.Timestamp;
+-
+-@JsonIgnoreProperties(ignoreUnknown = true)
+-class Event implements RestEntityWrapper<org.ovirt.mobile.movirt.model.Event> {
+-    public int id;
+-    public int code;
+-    public String description;
+-    public String severity;
+-    public long time;
+-
+-    public IdRef vm;
+-    public IdRef host;
+-    public IdRef cluster;
+-    public IdRef data_center;
+-    public IdRef storage_domain;
+-
+-    @JsonIgnoreProperties(ignoreUnknown = true)
+-    static class IdRef {
+-        public String id;
+-    }
+-
+-    @Override
+-    public org.ovirt.mobile.movirt.model.Event toEntity() {
+-        org.ovirt.mobile.movirt.model.Event event = new org.ovirt.mobile.movirt.model.Event();
+-        event.setId(id);
+-        event.setCode(code);
+-        event.setDescription(description);
+-        event.setSeverity(org.ovirt.mobile.movirt.model.Event.Severity.valueOf(severity.toUpperCase()));
+-        event.setTime(new Timestamp(time));
+-        if (vm != null) event.setVmId(vm.id);
+-        if (host != null) event.setHostId(host.id);
+-        if (cluster != null) event.setClusterId(cluster.id);
+-        if (storage_domain != null) event.setStorageDomainId(storage_domain.id);
+-        if (data_center != null) event.setDataCenterId(data_center.id);
+-        return event;
+-    }
+-}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Events.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Events.java
+deleted file mode 100644
+index ed1bcc6..0000000
+--- a/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Events.java
++++ /dev/null
+@@ -1,7 +0,0 @@
+-package org.ovirt.mobile.movirt.rest;
+-
+-import java.util.List;
+-
+-class Events {
+-    public List<Event> event;
+-}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Host.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Host.java
+deleted file mode 100644
+index c0201f6..0000000
+--- a/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Host.java
++++ /dev/null
+@@ -1,28 +0,0 @@
+-package org.ovirt.mobile.movirt.rest;
+-
+-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+-
+-@JsonIgnoreProperties(ignoreUnknown = true)
+-class Host implements RestEntityWrapper<org.ovirt.mobile.movirt.model.Host> {
+-
+-    // public for json mapping
+-    public String id;
+-    public String name;
+-    public Status status;
+-    public Cluster cluster;
+-
+-    @Override
+-    public org.ovirt.mobile.movirt.model.Host toEntity() {
+-        org.ovirt.mobile.movirt.model.Host host = new org.ovirt.mobile.movirt.model.Host();
+-        host.setId(id);
+-        host.setName(name);
+-        host.setStatus(mapStatus(status.state));
+-        host.setClusterId(cluster.id);
+-
+-        return host;
+-    }
+-
+-    private static org.ovirt.mobile.movirt.model.Host.Status mapStatus(String state) {
+-        return org.ovirt.mobile.movirt.model.Host.Status.valueOf(state.toUpperCase());
+-    }
+-}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Hosts.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Hosts.java
+deleted file mode 100644
+index e127c8f..0000000
+--- a/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Hosts.java
++++ /dev/null
+@@ -1,7 +0,0 @@
+-package org.ovirt.mobile.movirt.rest;
+-
+-import java.util.List;
+-
+-class Hosts {
+-    public List<Host> host;
+-}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Nic.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Nic.java
+deleted file mode 100644
+index 74686e4..0000000
+--- a/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Nic.java
++++ /dev/null
+@@ -1,21 +0,0 @@
+-package org.ovirt.mobile.movirt.rest;
+-
+-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+-
+-/**
+- * Created by yixin on 2015/3/24.
+- */
+-@JsonIgnoreProperties(ignoreUnknown = true)
+-public class Nic {
+-    public String name;
+-    public boolean linked;
+-    public Mac mac;
+-    public boolean active;
+-    public boolean plugged;
+-
+-    @JsonIgnoreProperties(ignoreUnknown = true)
+-    public static class Mac {
+-        public String address;
+-    }
+-
+-}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Nics.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Nics.java
+deleted file mode 100644
+index 9881aa2..0000000
+--- a/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Nics.java
++++ /dev/null
+@@ -1,10 +0,0 @@
+-package org.ovirt.mobile.movirt.rest;
+-
+-import java.util.List;
+-
+-/**
+- * Created by yixin on 2015/3/24.
+- */
+-public class Nics {
+-    public List<Nic> nic;
+-}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/NullHostnameVerifier.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/NullHostnameVerifier.java
+deleted file mode 100644
+index d311b80..0000000
+--- a/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/NullHostnameVerifier.java
++++ /dev/null
+@@ -1,21 +0,0 @@
+-package org.ovirt.mobile.movirt.rest;
+-
+-import android.util.Log;
+-
+-import org.androidannotations.annotations.EBean;
+-
+-import javax.net.ssl.HostnameVerifier;
+-import javax.net.ssl.SSLSession;
+-
+-/**
+- * Created by sphoorti on 18/11/14.
+- */
+-@EBean
+-public class NullHostnameVerifier implements HostnameVerifier {
+-    private static final String TAG = NullHostnameVerifier.class.getSimpleName();
+-
+-    public boolean verify(String hostname, SSLSession session) {
+-        Log.d(TAG,"Inside Verify");
+-        return true;
+-    }
+-}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/OVirtClient.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/OVirtClient.java
+deleted file mode 100644
+index f5cdce5..0000000
+--- a/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/OVirtClient.java
++++ /dev/null
+@@ -1,555 +0,0 @@
+-package org.ovirt.mobile.movirt.rest;
+-
+-import android.accounts.AccountManager;
+-import android.accounts.AccountManagerFuture;
+-import android.content.Context;
+-import android.content.Intent;
+-import android.os.Bundle;
+-import android.os.RemoteException;
+-import android.preference.PreferenceManager;
+-import android.text.TextUtils;
+-
+-import com.fasterxml.jackson.databind.ObjectMapper;
+-
+-import org.androidannotations.annotations.AfterInject;
+-import org.androidannotations.annotations.App;
+-import org.androidannotations.annotations.Bean;
+-import org.androidannotations.annotations.EBean;
+-import org.androidannotations.annotations.RootContext;
+-import org.androidannotations.annotations.SystemService;
+-import org.androidannotations.annotations.res.StringRes;
+-import org.androidannotations.annotations.rest.RestService;
+-import org.ovirt.mobile.movirt.Broadcasts;
+-import org.ovirt.mobile.movirt.MoVirtApp;
+-import org.ovirt.mobile.movirt.R;
+-import org.ovirt.mobile.movirt.auth.MovirtAuthenticator;
+-import org.ovirt.mobile.movirt.model.Cluster;
+-import org.ovirt.mobile.movirt.model.Event;
+-import org.ovirt.mobile.movirt.model.Host;
+-import org.ovirt.mobile.movirt.model.Vm;
+-import org.ovirt.mobile.movirt.sync.EventsHandler;
+-import org.ovirt.mobile.movirt.ui.AuthenticatorActivity_;
+-import org.springframework.core.NestedRuntimeException;
+-import org.springframework.http.HttpAuthentication;
+-import org.springframework.http.HttpStatus;
+-import org.springframework.web.client.HttpClientErrorException;
+-
+-import java.io.IOException;
+-import java.util.ArrayList;
+-import java.util.List;
+-
+-@EBean(scope = EBean.Scope.Singleton)
+-public class OVirtClient {
+-    private static final String TAG = OVirtClient.class.getSimpleName();
+-
+-    public static final String JSESSIONID = "JSESSIONID";
+-    public static final String FILTER = "Filter";
+-    public static final String PREFER = "Prefer";
+-
+-    ObjectMapper mapper = new ObjectMapper();
+-
+-    @RestService
+-    OVirtRestClient restClient;
+-
+-    @Bean
+-    OvirtSimpleClientHttpRequestFactory requestFactory;
+-
+-    @RootContext
+-    Context context;
+-
+-    @SystemService
+-    AccountManager accountManager;
+-
+-    @Bean
+-    MovirtAuthenticator authenticator;
+-
+-    @App
+-    MoVirtApp app;
+-
+-    @StringRes(R.string.rest_request_failed)
+-    String errorMsg;
+-
+-    public void startVm(final String vmId) {
+-        fireRestRequest(new Request<Void>() {
+-            @Override
+-            public Void fire() {
+-                restClient.startVm(new Action(), vmId);
+-                return null;
+-            }
+-        }, null);
+-    }
+-
+-    public void stopVm(final String vmId) {
+-        fireRestRequest(new Request<Void>() {
+-            @Override
+-            public Void fire() {
+-                restClient.stopVm(new Action(), vmId);
+-                return null;
+-            }
+-        }, null);
+-
+-    }
+-
+-    public void rebootVm(final String vmId) {
+-        fireRestRequest(new Request<Void>() {
+-            @Override
+-            public Void fire() {
+-                restClient.rebootVm(new Action(), vmId);
+-                return null;
+-            }
+-        }, null);
+-    }
+-
+-    public void getVm(final String vmId, Response<Vm> response) {
+-        fireRestRequest(new Request<Vm>() {
+-            @Override
+-            public Vm fire() {
+-                return restClient.getVm(vmId).toEntity();
+-            }
+-        }, response);
+-    }
+-
+-    public void getHost(final String hostId, Response<Host> response) {
+-        fireRestRequest(new Request<Host>() {
+-            @Override
+-            public Host fire() {
+-                return restClient.getHost(hostId).toEntity();
+-            }
+-        }, response);
+-    }
+-
+-    public void getConsoleTicket(final String vmId, Response<ActionTicket> response) {
+-        fireRestRequest(new Request<ActionTicket>() {
+-            @Override
+-            public ActionTicket fire() {
+-                return restClient.getConsoleTicket(new Action(), vmId);
+-            }
+-        }, response);
+-    }
+-
+-    public void getDisks(final String id, Response<Disks> response) {
+-        fireRestRequest(new Request<Disks>() {
+-            @Override
+-            public Disks fire() {
+-                return restClient.getDisks(id);
+-            }
+-        }, response);
+-    }
+-
+-    public void getVms(Response<List<Vm>> response) {
+-        fireRestRequest(new Request<List<Vm>>() {
+-            @Override
+-            public List<Vm> fire() {
+-                Vms loadedVms = null;
+-                if (authenticator.hasAdminPermissions()) {
+-                    int maxVms = asIntWithDefault("max_vms_polled", "-1");
+-                    String query = PreferenceManager.getDefaultSharedPreferences(app).getString("vms_search_query", "");
+-                    if (!"".equals(query)) {
+-                        loadedVms = restClient.getVms(query, maxVms);
+-                    } else {
+-                        loadedVms = restClient.getVms(maxVms);
+-                    }
+-
+-                } else {
+-                    loadedVms = restClient.getVms(-1);
+-                }
+-
+-                if (loadedVms == null) {
+-                    return new ArrayList<>();
+-                }
+-
+-                return mapRestWrappers(loadedVms.vm, null);
+-            }
+-        }, response);
+-    }
+-
+-    public void getClusters(Response<List<Cluster>> response) {
+-        fireRestRequest(new Request<List<Cluster>>() {
+-            @Override
+-            public List<Cluster> fire() {
+-                Clusters loadedClusters = restClient.getClusters();
+-                if (loadedClusters == null) {
+-                    return new ArrayList<>();
+-                }
+-
+-                return mapRestWrappers(loadedClusters.cluster, null);
+-            }
+-        }, response);
+-    }
+-
+-    public void getNics(final String id, Response<Nics> response) {
+-        fireRestRequest(new Request<Nics>() {
+-            @Override
+-            public Nics fire() {
+-                return restClient.getNics(id);
+-            }
+-        }, response);
+-    }
+-
+-   public void getHosts(Response<List<Host>> response) {
+-        fireRestRequest(new Request<List<Host>>() {
+-            @Override
+-            public List<Host> fire() {
+-                Hosts loadedHosts = restClient.getHosts();
+-                if (loadedHosts == null) {
+-                    return new ArrayList<>();
+-                }
+-
+-                return mapRestWrappers(loadedHosts.host, null);
+-            }
+-        }, response);
+-    }
+-
+-    public String login(String apiUrl, String username, String password, boolean disableHttps, boolean hasAdminPrivileges) {
+-        setPersistentAuthHeaders();
+-        restClient.setRootUrl(apiUrl);
+-        restClient.setHttpBasicAuth(username, password);
+-        restClient.setCookie("JSESSIONID", "");
+-        requestFactory.setIgnoreHttps(disableHttps);
+-        restClient.setHeader(FILTER, Boolean.toString(!hasAdminPrivileges));
+-        restClient.login();
+-        String sessionId = restClient.getCookie("JSESSIONID");
+-        restClient.setHttpBasicAuth("", "");
+-        return sessionId;
+-    }
+-
+-    public void getEventsSince(final int lastEventId, Response<List<Event>> response) {
+-        fireRestRequest(new Request<List<Event>>() {
+-            @Override
+-            public List<Event> fire() {
+-                Events loadedEvents = null;
+-
+-                if (authenticator.hasAdminPermissions()) {
+-                    int maxEventsStored = asIntWithDefault("max_events_stored", EventsHandler.MAX_EVENTS_LOCALLY);
+-
+-                    String query = PreferenceManager.getDefaultSharedPreferences(app).getString("events_search_query", "");
+-                    if (!"".equals(query)) {
+-                        loadedEvents = restClient.getEventsSince(Integer.toString(lastEventId), query, maxEventsStored);
+-                    } else {
+-                        loadedEvents = restClient.getEventsSince(Integer.toString(lastEventId), maxEventsStored);
+-                    }
+-                } else {
+-                    loadedEvents = restClient.getEventsSince(Integer.toString(lastEventId), -1);
+-                }
+-
+-
+-                if (loadedEvents == null) {
+-                    return new ArrayList<>();
+-                }
+-
+-                return mapRestWrappers(loadedEvents.event, new WrapPredicate<org.ovirt.mobile.movirt.rest.Event>() {
+-                    @Override
+-                    public boolean toWrap(org.ovirt.mobile.movirt.rest.Event entity) {
+-                        return entity.id > lastEventId;
+-                    }
+-                });
+-            }
+-        }, response);
+-    }
+-
+-    @AfterInject
+-    void initClient() {
+-        restClient.setHeader("Accept-Encoding", "gzip");
+-
+-        restClient.getRestTemplate().setRequestFactory(requestFactory);
+-    }
+-
+-    /**
+-     * has to be synced because of error handling - otherwise it would not be possible to bind the error
+-     */
+-    private synchronized <T> void fireRestRequest(final Request<T> request, final Response<T> response) {
+-        if (authenticator.enforceBasicAuth()) {
+-            fireRequestWithHttpBasicAuth(request, response);
+-        } else {
+-            fireRequestWithPersistentAuth(request, response);
+-        }
+-    }
+-
+-    private <T> void fireRequestWithHttpBasicAuth(Request<T> request, Response<T> response) {
+-        String userName = authenticator.getUserName();
+-        String password = authenticator.getPassword();
+-
+-        boolean success = false;
+-
+-        if (TextUtils.isEmpty(userName) || TextUtils.isEmpty(password) || TextUtils.isEmpty(authenticator.getApiUrl())) {
+-            Intent accountAuthenticatorResponse = new Intent(context, AuthenticatorActivity_.class);
+-            Intent editConnectionIntent = new Intent(Broadcasts.NO_CONNECTION_SPEFICIED);
+-            editConnectionIntent.putExtra(AccountManager.KEY_INTENT, accountAuthenticatorResponse);
+-            context.sendBroadcast(editConnectionIntent);
+-        } else {
+-            updateClientBeforeCall();
+-            restClient.setHttpBasicAuth(userName, password);
+-            restClient.setHeader(PREFER, "");
+-            restClient.setHeader(JSESSIONID, "");
+-
+-            if (response != null) {
+-                response.before();
+-            }
+-
+-            try {
+-                T restResponse = request.fire();
+-                success = true;
+-                if (response != null) {
+-                    response.onResponse(restResponse);
+-                }
+-            } catch (Exception e) {
+-                fireConnectionError(e);
+-            } finally {
+-                if (!success && response != null) {
+-                    response.onError();
+-                }
+-                if (response != null) {
+-                    response.after();
+-                }
+-            }
+-
+-        }
+-
+-    }
+-
+-    private <T> void fireRequestWithPersistentAuth(Request<T> request, Response<T> response) {
+-        if (response != null) {
+-            response.before();
+-        }
+-
+-        RestCallResult result = doFireRequestWithPersistentAuth(request, response);
+-        if (result == RestCallResult.AUTH_ERROR) {
+-            // if it is an expired session it has been cleared - try again.
+-            // If the credentials were filled well, now it will pass
+-            result = doFireRequestWithPersistentAuth(request, response);
+-        }
+-
+-        if (result != RestCallResult.SUCCESS && response != null) {
+-            response.onError();
+-        }
+-
+-        if (response != null) {
+-            response.after();
+-        }
+-    }
+-
+-    private <T> RestCallResult doFireRequestWithPersistentAuth(Request<T> request, Response<T> response) {
+-        AccountManagerFuture<Bundle> resp = accountManager.getAuthToken(MovirtAuthenticator.MOVIRT_ACCOUNT, MovirtAuthenticator.AUTH_TOKEN_TYPE, null, false, null, null);
+-
+-        boolean success = false;
+-
+-        try {
+-            Bundle result = resp.getResult();
+-            if (result.containsKey(AccountManager.KEY_AUTHTOKEN)) {
+-                String authToken = result.getString(AccountManager.KEY_AUTHTOKEN);
+-
+-                if (TextUtils.isEmpty(authToken)) {
+-                    fireConnectionError("Empty auth token");
+-                } else {
+-                    restClient.setCookie(JSESSIONID, authToken);
+-                    restClient.setAuthentication(new HttpAuthentication() {
+-                        @Override
+-                        public String getHeaderValue() {
+-                            // empty authentication - e.g. not the basic one
+-                            return "";
+-                        }
+-                    });
+-
+-                    updateClientBeforeCall();
+-
+-                    setPersistentAuthHeaders();
+-
+-                    try {
+-                        T restResponse = request.fire();
+-                        success = true;
+-                        if (response != null) {
+-                            response.onResponse(restResponse);
+-                        }
+-                        return RestCallResult.SUCCESS;
+-
+-                    } catch (NestedRuntimeException e) {
+-                        HttpStatus statusCode = null;
+-                        if (e instanceof HttpClientErrorException) {
+-                            statusCode = ((HttpClientErrorException) e).getStatusCode();
+-                        }
+-
+-                        if (statusCode == HttpStatus.UNAUTHORIZED) {
+-                            // ok, session id is not valid anymore - invalidate it
+-                            accountManager.invalidateAuthToken(MovirtAuthenticator.AUTH_TOKEN_TYPE, authToken);
+-                            accountManager.setAuthToken(MovirtAuthenticator.MOVIRT_ACCOUNT, MovirtAuthenticator.AUTH_TOKEN_TYPE, null);
+-                            return RestCallResult.AUTH_ERROR;
+-                        } else {
+-                            fireConnectionError(e);
+-                            return RestCallResult.OTHER_ERROR;
+-                        }
+-                    }
+-
+-                }
+-            } else if (result.containsKey(AccountManager.KEY_INTENT)) {
+-                Intent accountAuthenticatorResponse = result.getParcelable(AccountManager.KEY_INTENT);
+-                Intent editConnectionIntent = new Intent(Broadcasts.NO_CONNECTION_SPEFICIED);
+-                editConnectionIntent.putExtra(AccountManager.KEY_INTENT, accountAuthenticatorResponse);
+-                context.sendBroadcast(editConnectionIntent);
+-
+-                return RestCallResult.OTHER_ERROR;
+-            }
+-        } catch (Exception e) {
+-            fireConnectionError(e);
+-        }
+-        
+-        if (!success) {
+-            return RestCallResult.OTHER_ERROR;
+-        } else {
+-            return RestCallResult.SUCCESS;
+-        }
+-
+-    }
+-
+-    enum RestCallResult {
+-        SUCCESS,
+-        AUTH_ERROR,
+-        OTHER_ERROR
+-    }
+-
+-    private void setPersistentAuthHeaders() {
+-        restClient.setHeader("Session-TTL", "120"); // 2h
+-        restClient.setHeader("Prefer", "persistent-auth, csrf-protection");
+-    }
+-
+-    private void updateClientBeforeCall() {
+-        restClient.setHeader(FILTER, Boolean.toString(!authenticator.hasAdminPermissions()));
+-        requestFactory.setIgnoreHttps(authenticator.disableHttps());
+-        restClient.setRootUrl(authenticator.getApiUrl());
+-    }
+-
+-    public static interface Request<T> {
+-        T fire();
+-    }
+-
+-    public static interface Response<T> {
+-        void before();
+-
+-        void onResponse(T t) throws RemoteException;
+-
+-        void onError();
+-
+-        void after();
+-    }
+-
+-    public static abstract class SimpleResponse<T> implements Response<T> {
+-
+-        @Override
+-        public void before() {
+-            // do nothing
+-        }
+-
+-        @Override
+-        public void onResponse(T t) throws RemoteException {
+-            // do nothing
+-        }
+-
+-        @Override
+-        public void onError() {
+-            // do nothing
+-        }
+-
+-        @Override
+-        public void after() {
+-            // do nothing
+-        }
+-    }
+-
+-    /** Composes multiple {@link Response} objects and invokes their callbacks in specified order */
+-    public static class CompositeResponse<T> implements Response<T> {
+-
+-        private final Response<T>[] responses;
+-
+-        @SafeVarargs
+-        public CompositeResponse(Response<T> ...responses) {
+-            this.responses = responses;
+-        }
+-
+-        @Override
+-        public void before() {
+-            for (Response<T> response : responses) {
+-                if (response != null) {
+-                    response.before();
+-                }
+-            }
+-        }
+-
+-        @Override
+-        public void onResponse(T t) throws RemoteException {
+-            for (Response<T> response : responses) {
+-                if (response != null) {
+-                    response.onResponse(t);
+-                }
+-            }
+-        }
+-
+-        @Override
+-        public void onError() {
+-            for (Response<T> response : responses) {
+-                if (response != null) {
+-                    response.onError();
+-                }
+-            }
+-        }
+-
+-        @Override
+-        public void after() {
+-            for (Response<T> response : responses) {
+-                if (response != null) {
+-                    response.after();
+-                }
+-            }
+-        }
+-    }
+-
+-    private static interface WrapPredicate<E> {
+-        boolean toWrap(E entity);
+-    }
+-
+-    private static <E, R extends RestEntityWrapper<E>> List<E> mapRestWrappers(List<R> wrappers, WrapPredicate<R> predicate) {
+-        List<E> entities = new ArrayList<>();
+-        if (wrappers == null) {
+-            return entities;
+-        }
+-        for (R rest : wrappers) {
+-            if (predicate == null || predicate.toWrap(rest)) {
+-                entities.add(rest.toEntity());
+-            }
+-        }
+-        return entities;
+-    }
+-
+-    private int asIntWithDefault(String key, String defaultResult) {
+-        String maxEventsLocallyStr = PreferenceManager.getDefaultSharedPreferences(app).getString(key, defaultResult);
+-        try {
+-            return Integer.parseInt(maxEventsLocallyStr);
+-        } catch (NumberFormatException e) {
+-            return Integer.parseInt(defaultResult);
+-        }
+-    }
+-
+-    private void fireConnectionError(Exception e) {
+-        String msg = e.getMessage();
+-        if (e instanceof HttpClientErrorException) {
+-
+-            String responseBody = ((HttpClientErrorException) e).getResponseBodyAsString();
+-            if (!TextUtils.isEmpty(responseBody)) {
+-
+-                try {
+-                    ErrorBody errorBody = mapper.readValue(((HttpClientErrorException) e).getResponseBodyAsByteArray(), ErrorBody.class);
+-                    msg = msg + " " + errorBody.fault.reason + " " + errorBody.fault.detail;
+-                } catch (IOException e1) {
+-                    msg = msg + ": " + responseBody;
+-                }
+-
+-            }
+-        }
+-
+-        fireConnectionError(String.format(errorMsg, msg));
+-    }
+-
+-    private void fireConnectionError(String msg) {
+-        Intent intent = new Intent(Broadcasts.CONNECTION_FAILURE);
+-        intent.putExtra(Broadcasts.Extras.CONNECTION_FAILURE_REASON, msg);
+-        context.sendBroadcast(intent);
+-    }
+-}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/OVirtRestClient.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/OVirtRestClient.java
+deleted file mode 100644
+index f95d385..0000000
+--- a/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/OVirtRestClient.java
++++ /dev/null
+@@ -1,77 +0,0 @@
+-package org.ovirt.mobile.movirt.rest;
+-
+-import org.androidannotations.annotations.rest.Accept;
+-import org.androidannotations.annotations.rest.Get;
+-import org.androidannotations.annotations.rest.Post;
+-import org.androidannotations.annotations.rest.RequiresAuthentication;
+-import org.androidannotations.annotations.rest.RequiresCookie;
+-import org.androidannotations.annotations.rest.RequiresHeader;
+-import org.androidannotations.annotations.rest.Rest;
+-import org.androidannotations.annotations.rest.SetsCookie;
+-import org.androidannotations.api.rest.MediaType;
+-import org.androidannotations.api.rest.RestClientHeaders;
+-import org.androidannotations.api.rest.RestClientRootUrl;
+-import org.androidannotations.api.rest.RestClientSupport;
+-import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
+-
+-@Rest(converters = MappingJackson2HttpMessageConverter.class)
+-@Accept(MediaType.APPLICATION_JSON + "; detail=statistics")
+-@RequiresHeader({"Filter", "Accept-Encoding", "Session-TTL", "Prefer"})
+-@SetsCookie("JSESSIONID")
+-@RequiresCookie("JSESSIONID")
+-@RequiresAuthentication
+-public interface OVirtRestClient extends RestClientRootUrl, RestClientHeaders, RestClientSupport {
+-
+-    @Get("/vms;max={maxToLoad}")
+-    Vms getVms(int maxToLoad);
+-
+-    @Get("/vms;max={maxToLoad}?search={query}")
+-    Vms getVms(String query, int maxToLoad);
+-
+-    @Get("/vms/{id}/statistics")
+-    Statistics getVmStatistics(String id);
+-
+-    @Post("/vms/{id}/start")
+-    void startVm(Action action, String id);
+-
+-    @Post("/vms/{id}/stop")
+-    void stopVm(Action action, String id);
+-
+-    @Post("/vms/{id}/reboot")
+-    void rebootVm(Action action, String id);
+-
+-    @Get("/clusters")
+-    Clusters getClusters();
+-
+-    @Get("/events;max={maxToLoad}?from={lastEventId}&search=sortby time desc")
+-    Events getEventsSince(String lastEventId, int maxToLoad);
+-
+-    @Get("/events;max={maxToLoad}?from={lastEventId}&search={query}")
+-    Events getEventsSince(String lastEventId, String query, int maxToLoad);
+-
+-    @Get("/vms/{id}")
+-    Vm getVm(String id);
+-
+-    @Post("/vms/{id}/ticket")
+-    ActionTicket getConsoleTicket(Action action, String id);
+-
+-    @Get("/vms/{id}/disks")
+-    Disks getDisks(String id);
+-
+-    @Get("/vms/{id}/nics")
+-    Nics getNics(String id);
+-
+-    @Get("/hosts")
+-    Hosts getHosts();
+-
+-    @Get("/hosts/{id}")
+-    Host getHost(String id);
+-
+-    @Get("/")
+-    EmptyResult login();
+-
+-    void setCookie(String name, String value);
+-
+-    String getCookie(String name);
+-
+-}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/OvirtSimpleClientHttpRequestFactory.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/OvirtSimpleClientHttpRequestFactory.java
+deleted file mode 100644
+index 67b465d..0000000
+--- a/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/OvirtSimpleClientHttpRequestFactory.java
++++ /dev/null
+@@ -1,97 +0,0 @@
+-package org.ovirt.mobile.movirt.rest;
+-
+-import android.util.Log;
+-
+-import org.androidannotations.annotations.AfterInject;
+-import org.androidannotations.annotations.Bean;
+-import org.androidannotations.annotations.EBean;
+-import org.springframework.http.client.SimpleClientHttpRequestFactory;
+-
+-import java.io.IOException;
+-import java.net.HttpURLConnection;
+-import java.security.cert.CertificateException;
+-import java.security.cert.X509Certificate;
+-
+-import javax.net.ssl.HttpsURLConnection;
+-import javax.net.ssl.SSLContext;
+-import javax.net.ssl.SSLSocketFactory;
+-import javax.net.ssl.TrustManager;
+-import javax.net.ssl.X509TrustManager;
+-
+-/**
+- * Created by sphoorti on 19/11/14.
+- */
+-@EBean
+-public class OvirtSimpleClientHttpRequestFactory extends SimpleClientHttpRequestFactory {
+-
+-    @Bean
+-    NullHostnameVerifier verifier;
+-    private static final String TAG = OvirtSimpleClientHttpRequestFactory.class.getSimpleName();
+-    private boolean ignoreHttps;
+-    private SSLSocketFactory properSocketFactory;
+-
+-    @AfterInject
+-    void initFactory() {
+-        properSocketFactory = HttpsURLConnection.getDefaultSSLSocketFactory();
+-    }
+-
+-    public void setIgnoreHttps(boolean ignoreHttps) {
+-        this.ignoreHttps = ignoreHttps;
+-        if (ignoreHttps) {
+-            trustAllHosts();
+-        } else {
+-            untrustHosts();
+-        }
+-    }
+-
+-    @Override
+-    protected void prepareConnection(HttpURLConnection connection, String httpMethod) throws IOException {
+-        Log.d(TAG, "Prepare Connection");
+-        if (connection instanceof HttpsURLConnection && ignoreHttps) {
+-            Log.d(TAG, "Inside Prepare Connection");
+-            ((HttpsURLConnection) connection).setHostnameVerifier(verifier);
+-        }
+-        super.prepareConnection(connection, httpMethod);
+-    }
+-
+-    /**
+-     * Trust every server - dont check for any certificate
+-     */
+-    private void trustAllHosts() {
+-        // Create a trust manager that does not validate certificate chains
+-        TrustManager[] trustAllCerts = new TrustManager[] { new X509TrustManager() {
+-            public java.security.cert.X509Certificate[] getAcceptedIssuers() {
+-                return new java.security.cert.X509Certificate[] {};
+-            }
+-
+-            public void checkClientTrusted(X509Certificate[] chain,
+-                                           String authType) throws CertificateException {
+-            }
+-
+-            public void checkServerTrusted(X509Certificate[] chain,
+-                                           String authType) throws CertificateException {
+-            }
+-        }
+-    };
+-        // Install the all-trusting trust manager
+-        try {
+-            SSLContext sc = SSLContext.getInstance("TLS");
+-            sc.init(null, trustAllCerts, new java.security.SecureRandom());
+-            HttpsURLConnection
+-                    .setDefaultSSLSocketFactory(sc.getSocketFactory());
+-        } catch (Exception e) {
+-            e.printStackTrace();
+-        }
+-    }
+-
+-    /**
+-     * This method enables certificate checking.
+-     */
+-    private void untrustHosts() {
+-        try {
+-            HttpsURLConnection.setDefaultSSLSocketFactory(properSocketFactory);
+-        } catch (Exception e) {
+-            e.printStackTrace();
+-        }
+-    }
+-}
+\ No newline at end of file
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/RestEntityWrapper.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/RestEntityWrapper.java
+deleted file mode 100644
+index 2c965e7..0000000
+--- a/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/RestEntityWrapper.java
++++ /dev/null
+@@ -1,5 +0,0 @@
+-package org.ovirt.mobile.movirt.rest;
+-
+-interface RestEntityWrapper<E> {
+-    E toEntity();
+-}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Statistic.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Statistic.java
+deleted file mode 100644
+index d9d016f..0000000
+--- a/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Statistic.java
++++ /dev/null
+@@ -1,20 +0,0 @@
+-package org.ovirt.mobile.movirt.rest;
+-
+-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+-
+-import java.util.List;
+-
+-@JsonIgnoreProperties(ignoreUnknown = true)
+-class Statistic {
+-    public String name;
+-    public Values values;
+-
+-    static class Values {
+-        public List<Value> value;
+-        public String type;
+-    }
+-
+-    static class Value {
+-        public String datum;
+-    }
+-}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Statistics.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Statistics.java
+deleted file mode 100644
+index 0f2594f..0000000
+--- a/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Statistics.java
++++ /dev/null
+@@ -1,7 +0,0 @@
+-package org.ovirt.mobile.movirt.rest;
+-
+-import java.util.List;
+-
+-class Statistics {
+-    public List<Statistic> statistic;
+-}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Status.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Status.java
+deleted file mode 100644
+index a460704..0000000
+--- a/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Status.java
++++ /dev/null
+@@ -1,9 +0,0 @@
+-package org.ovirt.mobile.movirt.rest;
+-
+-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+-
+-// status complex object in rest
+-@JsonIgnoreProperties(ignoreUnknown = true)
+-public class Status {
+-    public String state;
+-}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Topology.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Topology.java
+deleted file mode 100644
+index 9500d53..0000000
+--- a/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Topology.java
++++ /dev/null
+@@ -1,11 +0,0 @@
+-package org.ovirt.mobile.movirt.rest;
+-
+-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+-
+-/**
+- * Created by sphoorti on 28/1/15.
+- */
+-@JsonIgnoreProperties(ignoreUnknown = true)
+-public class Topology {
+-    public String sockets, cores;
+-}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Vm.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Vm.java
+deleted file mode 100644
+index 2813436..0000000
+--- a/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Vm.java
++++ /dev/null
+@@ -1,106 +0,0 @@
+-package org.ovirt.mobile.movirt.rest;
+-
+-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+-
+-import java.math.BigDecimal;
+-import java.math.RoundingMode;
+-import java.util.List;
+-
+-@JsonIgnoreProperties(ignoreUnknown = true)
+-public class Vm implements RestEntityWrapper<org.ovirt.mobile.movirt.model.Vm> {
+-
+-    private static final String CPU_PERCENTAGE_STAT = "cpu.current.total";
+-    private static final String TOTAL_MEMORY_STAT = "memory.installed";
+-    private static final String USED_MEMORY_STAT = "memory.used";
+-
+-    // public for json mapping
+-    public String id;
+-    public String name;
+-    public Status status;
+-    public Cluster cluster;
+-    public Statistics statistics;
+-    public String memory;
+-    public Display display;
+-    public Os os;
+-    public Cpu cpu;
+-
+-    @JsonIgnoreProperties(ignoreUnknown = true)
+-    public static class Display {
+-        public String address, port, type;
+-    }
+-
+-    @JsonIgnoreProperties(ignoreUnknown = true)
+-    public static class Os {
+-        public String type;
+-    }
+-
+-    @JsonIgnoreProperties(ignoreUnknown = true)
+-    public static class Cpu {
+-        public Topology topology;
+-    }
+-
+-    @Override
+-    public String toString() {
+-        return String.format("Vm: name=%s, id=%s, status=%s, clusterId=%s",
+-                             name, id, status.state, cluster.id);
+-    }
+-
+-    public org.ovirt.mobile.movirt.model.Vm toEntity() {
+-        org.ovirt.mobile.movirt.model.Vm vm = new org.ovirt.mobile.movirt.model.Vm();
+-        vm.setId(id);
+-        vm.setName(name);
+-        vm.setStatus(mapStatus(status.state));
+-        vm.setClusterId(cluster.id);
+-
+-        if (statistics != null && statistics.statistic != null) {
+-            BigDecimal cpu = getStatisticValueByName(CPU_PERCENTAGE_STAT, statistics.statistic);
+-            BigDecimal totalMemory = getStatisticValueByName(TOTAL_MEMORY_STAT, statistics.statistic);
+-            BigDecimal usedMemory = getStatisticValueByName(USED_MEMORY_STAT, statistics.statistic);
+-
+-            vm.setCpuUsage(cpu.doubleValue());
+-            if (BigDecimal.ZERO.equals(totalMemory)) {
+-                vm.setMemoryUsage(0);
+-            } else {
+-                vm.setMemoryUsage(100 * usedMemory.divide(totalMemory, 3, RoundingMode.HALF_UP).doubleValue());
+-            }
+-        }
+-
+-        try {
+-            vm.setMemorySizeMb(Long.parseLong(memory) / (1024 * 1024));
+-        } catch (Exception e) {
+-            vm.setMemorySizeMb(-1);
+-        }
+-
+-        vm.setSockets(Integer.parseInt(cpu.topology.sockets));
+-        vm.setCoresPerSocket(Integer.parseInt(cpu.topology.cores));
+-
+-        vm.setOsType(os.type);
+-
+-        vm.setDisplayType(mapDisplay(display.type));
+-        vm.setDisplayAddress(display.address);
+-        try {
+-            vm.setDisplayPort(Integer.parseInt(display.port));
+-        } catch (Exception e) {
+-            vm.setDisplayPort(-1);
+-        }
+-
+-        return vm;
+-    }
+-
+-    private static org.ovirt.mobile.movirt.model.Vm.Status mapStatus(String status) {
+-        return org.ovirt.mobile.movirt.model.Vm.Status.valueOf(status.toUpperCase());
+-    }
+-
+-    private static org.ovirt.mobile.movirt.model.Vm.Display mapDisplay(String display) {
+-        return org.ovirt.mobile.movirt.model.Vm.Display.valueOf(display.toUpperCase());
+-    }
+-
+-    private static BigDecimal getStatisticValueByName(String name, List<Statistic> statistics) {
+-        for (Statistic statistic : statistics) {
+-            if (name.equals(statistic.name)) {
+-                return new BigDecimal(statistic.values.value.get(0).datum);
+-            }
+-        }
+-        return BigDecimal.ZERO;
+-    }
+-}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Vms.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Vms.java
+deleted file mode 100644
+index e2489cb..0000000
+--- a/moVirt/src/main/java/org/ovirt/mobile/movirt/rest/Vms.java
++++ /dev/null
+@@ -1,7 +0,0 @@
+-package org.ovirt.mobile.movirt.rest;
+-
+-import java.util.List;
+-
+-class Vms {
+-    public List<Vm> vm;
+-}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/ActionStrategy.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/ActionStrategy.java
+new file mode 100644
+index 0000000..cfa0402
+--- /dev/null
++++ b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/ActionStrategy.java
+@@ -0,0 +1,15 @@
++package org.ovirt.mobile.movirt.sync;
++
++import org.ovirt.mobile.movirt.sync.rest.ActionTicket;
++
++public interface ActionStrategy {
++    void startVm(String vmId);
++
++    void stopVm(String vmId);
++
++    void rebootVm(String vmId);
++
++    void getConsoleTicket(String vmId, Response<ActionTicket> response);
++
++    String login(String apiUrl, String username, String password, boolean disableHttps, boolean hasAdminPrivileges);
++}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/BaseSyncStrategy.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/BaseSyncStrategy.java
+new file mode 100644
+index 0000000..2bf8764
+--- /dev/null
++++ b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/BaseSyncStrategy.java
+@@ -0,0 +1,41 @@
++package org.ovirt.mobile.movirt.sync;
++
++import android.content.Context;
++import android.content.Intent;
++
++import org.androidannotations.annotations.EBean;
++import org.androidannotations.annotations.RootContext;
++import org.ovirt.mobile.movirt.Broadcasts;
++
++import java.util.ArrayList;
++import java.util.List;
++
++@EBean
++public abstract class BaseSyncStrategy implements SyncStrategy {
++
++    @RootContext
++    protected Context context;
++
++    protected static interface WrapPredicate<E> {
++        boolean toWrap(E entity);
++    }
++
++    protected static <E, R extends RestEntityWrapper<E>> List<E> mapRestWrappers(List<R> wrappers, WrapPredicate<R> predicate) {
++        List<E> entities = new ArrayList<>();
++        if (wrappers == null) {
++            return entities;
++        }
++        for (R rest : wrappers) {
++            if (predicate == null || predicate.toWrap(rest)) {
++                entities.add(rest.toEntity());
++            }
++        }
++        return entities;
++    }
++
++    protected void fireConnectionError(String msg) {
++        Intent intent = new Intent(Broadcasts.CONNECTION_FAILURE);
++        intent.putExtra(Broadcasts.Extras.CONNECTION_FAILURE_REASON, msg);
++        context.sendBroadcast(intent);
++    }
++}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/CompositeResponse.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/CompositeResponse.java
+new file mode 100644
+index 0000000..a5b975c
+--- /dev/null
++++ b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/CompositeResponse.java
+@@ -0,0 +1,50 @@
++package org.ovirt.mobile.movirt.sync;
++
++import android.os.RemoteException;
++
++/** Composes multiple {@link Response} objects and invokes their callbacks in specified order */
++public class CompositeResponse<T> implements Response<T> {
++
++    private final Response<T>[] responses;
++
++    @SafeVarargs
++    public CompositeResponse(Response<T>... responses) {
++        this.responses = responses;
++    }
++
++    @Override
++    public void before() {
++        for (Response<T> response : responses) {
++            if (response != null) {
++                response.before();
++            }
++        }
++    }
++
++    @Override
++    public void onResponse(T t) throws RemoteException {
++        for (Response<T> response : responses) {
++            if (response != null) {
++                response.onResponse(t);
++            }
++        }
++    }
++
++    @Override
++    public void onError() {
++        for (Response<T> response : responses) {
++            if (response != null) {
++                response.onError();
++            }
++        }
++    }
++
++    @Override
++    public void after() {
++        for (Response<T> response : responses) {
++            if (response != null) {
++                response.after();
++            }
++        }
++    }
++}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/EventsHandler.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/EventsHandler.java
+index a39a193..c123486 100644
+--- a/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/EventsHandler.java
++++ b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/EventsHandler.java
+@@ -21,7 +21,6 @@
+ import org.ovirt.mobile.movirt.model.trigger.EventTriggerResolver;
+ import org.ovirt.mobile.movirt.model.trigger.Trigger;
+ import org.ovirt.mobile.movirt.provider.ProviderFacade;
+-import org.ovirt.mobile.movirt.rest.OVirtClient;
+ import org.ovirt.mobile.movirt.ui.MainActivity_;
+ import org.ovirt.mobile.movirt.util.NotificationDisplayer;
+ 
+@@ -86,7 +85,7 @@ public void updateEvents(boolean force) {
+ 
+             if (configuredPoll || force) {
+                 batch = provider.batch();
+-                oVirtClient.getEventsSince(!deleteEventsBeforeInsert ? lastEventId : 0, new OVirtClient.SimpleResponse<List<Event>>() {
++                oVirtClient.getEventsSince(!deleteEventsBeforeInsert ? lastEventId : 0, new SimpleResponse<List<Event>>() {
+ 
+                     @Override
+                     public void before() {
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/NullHostnameVerifier.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/NullHostnameVerifier.java
+new file mode 100644
+index 0000000..6116f1c
+--- /dev/null
++++ b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/NullHostnameVerifier.java
+@@ -0,0 +1,21 @@
++package org.ovirt.mobile.movirt.sync;
++
++import android.util.Log;
++
++import org.androidannotations.annotations.EBean;
++
++import javax.net.ssl.HostnameVerifier;
++import javax.net.ssl.SSLSession;
++
++/**
++ * Created by sphoorti on 18/11/14.
++ */
++@EBean
++public class NullHostnameVerifier implements HostnameVerifier {
++    private static final String TAG = NullHostnameVerifier.class.getSimpleName();
++
++    public boolean verify(String hostname, SSLSession session) {
++        Log.d(TAG,"Inside Verify");
++        return true;
++    }
++}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/OVirtClient.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/OVirtClient.java
+new file mode 100644
+index 0000000..0b5f3da
+--- /dev/null
++++ b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/OVirtClient.java
+@@ -0,0 +1,115 @@
++package org.ovirt.mobile.movirt.sync;
++
++import org.androidannotations.annotations.Bean;
++import org.androidannotations.annotations.EBean;
++import org.ovirt.mobile.movirt.auth.MovirtAuthenticator;
++import org.ovirt.mobile.movirt.model.Cluster;
++import org.ovirt.mobile.movirt.model.Event;
++import org.ovirt.mobile.movirt.model.Host;
++import org.ovirt.mobile.movirt.model.Vm;
++import org.ovirt.mobile.movirt.sync.doctor.DoctorSyncStrategy;
++import org.ovirt.mobile.movirt.sync.rest.ActionTicket;
++import org.ovirt.mobile.movirt.sync.rest.Disks;
++import org.ovirt.mobile.movirt.sync.rest.Nics;
++import org.ovirt.mobile.movirt.sync.rest.OVirtRestSyncStrategy;
++
++import java.util.List;
++
++@EBean(scope = EBean.Scope.Singleton)
++public class OVirtClient implements SyncStrategy, ActionStrategy {
++    private static final String TAG = OVirtClient.class.getSimpleName();
++
++    @Bean
++    MovirtAuthenticator authenticator;
++
++    @Bean
++    DoctorSyncStrategy doctorSyncStrategy;
++
++    @Bean
++    OVirtRestSyncStrategy oVirtRestSyncStrategy;
++
++    @Override
++    public void startVm(String vmId) {
++        oVirtRestSyncStrategy.startVm(vmId);
++    }
++
++    @Override
++    public void stopVm(String vmId) {
++        oVirtRestSyncStrategy.stopVm(vmId);
++    }
++
++    @Override
++    public void rebootVm(String vmId) {
++        oVirtRestSyncStrategy.rebootVm(vmId);
++    }
++
++    @Override
++    public void getConsoleTicket(String vmId, Response<ActionTicket> response) {
++        oVirtRestSyncStrategy.getConsoleTicket(vmId, response);
++    }
++
++    @Override
++    public String login(String apiUrl, String username, String password, boolean disableHttps, boolean hasAdminPrivileges) {
++        return oVirtRestSyncStrategy.login(apiUrl, username, password, disableHttps, hasAdminPrivileges);
++    }
++
++    @Override
++    public void getVm(String vmId, Response<Vm> response) {
++        if (doctorSyncStrategy.isAvailable()) {
++            doctorSyncStrategy.getVm(vmId, response);
++        } else {
++            oVirtRestSyncStrategy.getVm(vmId, response);
++        }
++    }
++
++    @Override
++    public void getVms(Response<List<Vm>> response) {
++        if (doctorSyncStrategy.isAvailable()) {
++            doctorSyncStrategy.getVms(response);
++        } else {
++            oVirtRestSyncStrategy.getVms(response);
++        }
++    }
++
++    @Override
++    public void getHost(String hostId, Response<Host> response) {
++        if (doctorSyncStrategy.isAvailable()) {
++            doctorSyncStrategy.getHost(hostId, response);
++        } else {
++            oVirtRestSyncStrategy.getHost(hostId, response);
++        }
++    }
++
++    @Override
++    public void getHosts(Response<List<Host>> response) {
++        if (doctorSyncStrategy.isAvailable()) {
++            doctorSyncStrategy.getHosts(response);
++        } else {
++            oVirtRestSyncStrategy.getHosts(response);
++        }
++    }
++
++    @Override
++    public void getClusters(Response<List<Cluster>> response) {
++        if (doctorSyncStrategy.isAvailable()) {
++            doctorSyncStrategy.getClusters(response);
++        } else {
++            oVirtRestSyncStrategy.getClusters(response);
++        }
++    }
++
++    @Override
++    public void getDisks(String id, Response<Disks> response) {
++        oVirtRestSyncStrategy.getDisks(id, response);
++    }
++
++    @Override
++    public void getNics(String id, Response<Nics> response) {
++        oVirtRestSyncStrategy.getNics(id, response);
++    }
++
++    @Override
++    public void getEventsSince(int lastEventId, Response<List<Event>> response) {
++        oVirtRestSyncStrategy.getEventsSince(lastEventId, response);
++    }
++}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/OvirtSimpleClientHttpRequestFactory.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/OvirtSimpleClientHttpRequestFactory.java
+new file mode 100644
+index 0000000..d517269
+--- /dev/null
++++ b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/OvirtSimpleClientHttpRequestFactory.java
+@@ -0,0 +1,98 @@
++package org.ovirt.mobile.movirt.sync;
++
++import android.util.Log;
++
++import org.androidannotations.annotations.AfterInject;
++import org.androidannotations.annotations.Bean;
++import org.androidannotations.annotations.EBean;
++import org.springframework.http.client.SimpleClientHttpRequestFactory;
++
++import java.io.IOException;
++import java.net.HttpURLConnection;
++import java.security.cert.CertificateException;
++import java.security.cert.X509Certificate;
++
++import javax.net.ssl.HttpsURLConnection;
++import javax.net.ssl.SSLContext;
++import javax.net.ssl.SSLSocketFactory;
++import javax.net.ssl.TrustManager;
++import javax.net.ssl.X509TrustManager;
++
++/**
++ * Created by sphoorti on 19/11/14.
++ */
++@EBean
++public class OvirtSimpleClientHttpRequestFactory extends SimpleClientHttpRequestFactory {
++
++    @Bean
++    NullHostnameVerifier verifier;
++    private static final String TAG = OvirtSimpleClientHttpRequestFactory.class.getSimpleName();
++    private boolean ignoreHttps;
++    private SSLSocketFactory properSocketFactory;
++
++    @AfterInject
++    void initFactory() {
++        properSocketFactory = HttpsURLConnection.getDefaultSSLSocketFactory();
++    }
++
++    public void setIgnoreHttps(boolean ignoreHttps) {
++        this.ignoreHttps = ignoreHttps;
++        if (ignoreHttps) {
++            trustAllHosts();
++        } else {
++            untrustHosts();
++        }
++    }
++
++    @Override
++    protected void prepareConnection(HttpURLConnection connection, String httpMethod) throws IOException {
++        Log.d(TAG, "Prepare Connection");
++        if (connection instanceof HttpsURLConnection && ignoreHttps) {
++            Log.d(TAG, "Inside Prepare Connection");
++            ((HttpsURLConnection) connection).setHostnameVerifier(verifier);
++        }
++        connection.setDoOutput(true);
++        super.prepareConnection(connection, httpMethod);
++    }
++
++    /**
++     * Trust every server - dont check for any certificate
++     */
++    private void trustAllHosts() {
++        // Create a trust manager that does not validate certificate chains
++        TrustManager[] trustAllCerts = new TrustManager[] { new X509TrustManager() {
++            public java.security.cert.X509Certificate[] getAcceptedIssuers() {
++                return new java.security.cert.X509Certificate[] {};
++            }
++
++            public void checkClientTrusted(X509Certificate[] chain,
++                                           String authType) throws CertificateException {
++            }
++
++            public void checkServerTrusted(X509Certificate[] chain,
++                                           String authType) throws CertificateException {
++            }
++        }
++    };
++        // Install the all-trusting trust manager
++        try {
++            SSLContext sc = SSLContext.getInstance("TLS");
++            sc.init(null, trustAllCerts, new java.security.SecureRandom());
++            HttpsURLConnection
++                    .setDefaultSSLSocketFactory(sc.getSocketFactory());
++        } catch (Exception e) {
++            e.printStackTrace();
++        }
++    }
++
++    /**
++     * This method enables certificate checking.
++     */
++    private void untrustHosts() {
++        try {
++            HttpsURLConnection.setDefaultSSLSocketFactory(properSocketFactory);
++        } catch (Exception e) {
++            e.printStackTrace();
++        }
++    }
++}
+\ No newline at end of file
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/Request.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/Request.java
+new file mode 100644
+index 0000000..b5011d5
+--- /dev/null
++++ b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/Request.java
+@@ -0,0 +1,5 @@
++package org.ovirt.mobile.movirt.sync;
++
++public interface Request<T> {
++    T fire();
++}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/Response.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/Response.java
+new file mode 100644
+index 0000000..5c57e61
+--- /dev/null
++++ b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/Response.java
+@@ -0,0 +1,13 @@
++package org.ovirt.mobile.movirt.sync;
++
++import android.os.RemoteException;
++
++public interface Response<T> {
++    void before();
++
++    void onResponse(T t) throws RemoteException;
++
++    void onError();
++
++    void after();
++}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/RestEntityWrapper.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/RestEntityWrapper.java
+new file mode 100644
+index 0000000..f1e95f5
+--- /dev/null
++++ b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/RestEntityWrapper.java
+@@ -0,0 +1,5 @@
++package org.ovirt.mobile.movirt.sync;
++
++public interface RestEntityWrapper<E> {
++    E toEntity();
++}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/SimpleResponse.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/SimpleResponse.java
+new file mode 100644
+index 0000000..89c55f5
+--- /dev/null
++++ b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/SimpleResponse.java
+@@ -0,0 +1,26 @@
++package org.ovirt.mobile.movirt.sync;
++
++import android.os.RemoteException;
++
++public class SimpleResponse<T> implements Response<T> {
++
++    @Override
++    public void before() {
++        // do nothing
++    }
++
++    @Override
++    public void onResponse(T t) throws RemoteException {
++        // do nothing
++    }
++
++    @Override
++    public void onError() {
++        // do nothing
++    }
++
++    @Override
++    public void after() {
++        // do nothing
++    }
++}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/SyncAdapter.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/SyncAdapter.java
+index cb7da91..f8f3492 100644
+--- a/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/SyncAdapter.java
++++ b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/SyncAdapter.java
+@@ -29,7 +29,6 @@
+ import org.ovirt.mobile.movirt.model.Vm;
+ import org.ovirt.mobile.movirt.model.trigger.Trigger;
+ import org.ovirt.mobile.movirt.provider.ProviderFacade;
+-import org.ovirt.mobile.movirt.rest.OVirtClient;
+ import org.ovirt.mobile.movirt.util.NotificationDisplayer;
+ 
+ import java.util.Collection;
+@@ -107,9 +106,10 @@ public synchronized void doPerformSync(boolean tryEvents) {
+         }
+     }
+ 
+-    public synchronized void syncVm(final String id, final OVirtClient.Response<Vm> response) {
++    public synchronized void syncVm(final String id, final Response<Vm> response) {
++        Log.i(TAG, "Syncing VM: " + id);
+         initBatch();
+-        oVirtClient.getVm(id, new OVirtClient.CompositeResponse<>(new OVirtClient.SimpleResponse<Vm>() {
++        oVirtClient.getVm(id, new CompositeResponse<>(new SimpleResponse<Vm>() {
+             @Override
+             public void onResponse(Vm vm) throws RemoteException {
+                 updateLocalEntity(vm, Vm.class);
+@@ -118,9 +118,10 @@ public void onResponse(Vm vm) throws RemoteException {
+         }, response));
+     }
+ 
+-    public synchronized void syncHost(String id, OVirtClient.Response<Host> response) {
++    public synchronized void syncHost(String id, Response<Host> response) {
++        Log.i(TAG, "Syncing Host: " + id);
+         initBatch();
+-        oVirtClient.getHost(id, new OVirtClient.CompositeResponse<>(new OVirtClient.SimpleResponse<Host>() {
++        oVirtClient.getHost(id, new CompositeResponse<>(new SimpleResponse<Host>() {
+             @Override
+             public void onResponse(Host host) throws RemoteException {
+                 updateLocalEntity(host, Host.class);
+@@ -134,13 +135,13 @@ private void updateQuickEntities() throws RemoteException {
+ 
+         // TODO: we really need promises here
+         // TODO: ideally split each request and save vms, hosts, ... in separate batches
+-        oVirtClient.getVms(new OVirtClient.SimpleResponse<List<Vm>>() {
++        oVirtClient.getVms(new SimpleResponse<List<Vm>>() {
+             @Override
+             public void onResponse(final List<Vm> remoteVms) throws RemoteException {
+-                oVirtClient.getClusters(new OVirtClient.SimpleResponse<List<Cluster>>() {
++                oVirtClient.getClusters(new SimpleResponse<List<Cluster>>() {
+                     @Override
+                     public void onResponse(final List<Cluster> remoteClusters) throws RemoteException {
+-                        oVirtClient.getHosts(new OVirtClient.SimpleResponse<List<Host>>() {
++                        oVirtClient.getHosts(new SimpleResponse<List<Host>>() {
+                             @Override
+                             public void onResponse(final List<Host> remoteHosts) throws RemoteException {
+                                 updateLocalEntities(remoteClusters, Cluster.class);
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/SyncStrategy.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/SyncStrategy.java
+new file mode 100644
+index 0000000..c565f28
+--- /dev/null
++++ b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/SyncStrategy.java
+@@ -0,0 +1,28 @@
++package org.ovirt.mobile.movirt.sync;
++
++import org.ovirt.mobile.movirt.model.Cluster;
++import org.ovirt.mobile.movirt.model.Event;
++import org.ovirt.mobile.movirt.model.Host;
++import org.ovirt.mobile.movirt.model.Vm;
++import org.ovirt.mobile.movirt.sync.rest.Disks;
++import org.ovirt.mobile.movirt.sync.rest.Nics;
++
++import java.util.List;
++
++public interface SyncStrategy {
++    void getVm(String vmId, Response<Vm> response);
++
++    void getVms(Response<List<Vm>> response);
++
++    void getHost(String hostId, Response<Host> response);
++
++    void getHosts(Response<List<Host>> response);
++
++    void getClusters(Response<List<Cluster>> response);
++
++    void getDisks(String id, Response<Disks> response);
++
++    void getNics(String id, Response<Nics> response);
++
++    void getEventsSince(int lastEventId, Response<List<Event>> response);
++}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/SyncUtils.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/SyncUtils.java
+index 0d87205..add2222 100644
+--- a/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/SyncUtils.java
++++ b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/SyncUtils.java
+@@ -1,10 +1,14 @@
+ package org.ovirt.mobile.movirt.sync;
+ 
+ import android.content.ContentResolver;
++import android.content.Context;
++import android.content.Intent;
+ import android.os.Bundle;
+ 
+ import org.androidannotations.annotations.Bean;
+ import org.androidannotations.annotations.EBean;
++import org.androidannotations.annotations.RootContext;
++import org.ovirt.mobile.movirt.Broadcasts;
+ import org.ovirt.mobile.movirt.auth.MovirtAuthenticator;
+ import org.ovirt.mobile.movirt.provider.OVirtContract;
+ 
+@@ -14,6 +18,9 @@
+     @Bean
+     SyncAdapter syncAdapter;
+ 
++    @RootContext
++    Context context;
++
+     /**
+      * Helper method to trigger an immediate sync ("refresh").
+      *
+@@ -26,6 +33,8 @@
+      * the OS additional freedom in scheduling your sync request.
+      */
+     public void triggerRefresh() {
++        context.sendBroadcast(new Intent(Broadcasts.REFRESH_TRIGGERED));
++
+         Bundle b = new Bundle();
+         // Disable sync backoff and ignore sync preferences. In other words...perform sync NOW!
+         b.putBoolean(ContentResolver.SYNC_EXTRAS_MANUAL, true);
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/doctor/Cluster.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/doctor/Cluster.java
+new file mode 100644
+index 0000000..0c32fea
+--- /dev/null
++++ b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/doctor/Cluster.java
+@@ -0,0 +1,25 @@
++package org.ovirt.mobile.movirt.sync.doctor;
++
++import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
++import com.fasterxml.jackson.annotation.JsonProperty;
++
++import org.ovirt.mobile.movirt.sync.RestEntityWrapper;
++
++@JsonIgnoreProperties(ignoreUnknown = true)
++public class Cluster implements RestEntityWrapper<org.ovirt.mobile.movirt.model.Cluster> {
++
++    @JsonProperty("id")
++    public String id;
++
++    @JsonProperty("name")
++    public String name;
++
++    @Override
++    public org.ovirt.mobile.movirt.model.Cluster toEntity() {
++        org.ovirt.mobile.movirt.model.Cluster cluster = new org.ovirt.mobile.movirt.model.Cluster();
++        cluster.setId(id);
++        cluster.setName(name);
++
++        return cluster;
++    }
++}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/doctor/DoctorFieldSelectHttpRequestInterceptor.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/doctor/DoctorFieldSelectHttpRequestInterceptor.java
+new file mode 100644
+index 0000000..38c8170
+--- /dev/null
++++ b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/doctor/DoctorFieldSelectHttpRequestInterceptor.java
+@@ -0,0 +1,109 @@
++package org.ovirt.mobile.movirt.sync.doctor;
++
++import android.text.TextUtils;
++import android.util.Log;
++
++import com.fasterxml.jackson.annotation.JsonProperty;
++import com.fasterxml.jackson.core.JsonProcessingException;
++import com.fasterxml.jackson.databind.ObjectMapper;
++
++import org.springframework.http.HttpMethod;
++import org.springframework.http.HttpRequest;
++import org.springframework.http.client.ClientHttpRequestExecution;
++import org.springframework.http.client.ClientHttpRequestInterceptor;
++import org.springframework.http.client.ClientHttpResponse;
++import org.springframework.http.client.support.HttpRequestWrapper;
++import org.springframework.util.StringUtils;
++
++import java.io.IOException;
++import java.lang.reflect.Field;
++import java.net.URI;
++import java.net.URISyntaxException;
++import java.util.ArrayList;
++import java.util.HashMap;
++import java.util.List;
++import java.util.Map;
++import java.util.regex.Matcher;
++import java.util.regex.Pattern;
++
++/**
++ * <p>
++ * Interceptor that wraps HTTP requests to Doctor Rest by adding query parameter that restricts
++ * the returned fields to those that will actually be used (mapped to business entities).
++ * </p>
++ *
++ * <p>It determines the required fields by reflecting over {@link com.fasterxml.jackson.annotation.JsonProperty} annotated fields.</p>
++ * Please note that current implementation expects the {@link com.fasterxml.jackson.annotation.JsonProperty#value()} to be used
++ * even in the simple cases such as
++ * <pre>{@code
++ *      &#064;JsonProperty("name")
++ *      private String name;
++ * }</pre>
++ */
++public class DoctorFieldSelectHttpRequestInterceptor implements ClientHttpRequestInterceptor {
++
++    private static final String TAG = DoctorFieldSelectHttpRequestInterceptor.class.getSimpleName();
++
++    private static Map<String, String> cachedFields = new HashMap<>();
++
++    private static final String PREFIX = "/entities/";
++    private static final Pattern ENTITY_PATTERN = Pattern.compile(PREFIX + "(\\w+)");
++
++    private static ObjectMapper mapper = new ObjectMapper();
++
++    @Override
++    public ClientHttpResponse intercept(HttpRequest request, byte[] body, ClientHttpRequestExecution execution) throws IOException {
++        if (!request.getMethod().equals(HttpMethod.GET) || !TextUtils.isEmpty(request.getURI().getQuery())) {
++            return execution.execute(request, body);
++        }
++
++        Matcher matcher = ENTITY_PATTERN.matcher(request.getURI().getPath());
++        if (!matcher.matches()) {
++            return execution.execute(request, body);
++        }
++
++        String entity = matcher.group(1);
++
++        if (!cachedFields.containsKey(entity)) {
++            determineUsedJsonProperties(entity);
++        }
++
++        final String query = cachedFields.get(entity);
++        HttpRequestWrapper wrapper = new HttpRequestWrapper(request) {
++            @Override
++            public URI getURI() {
++                URI uri = super.getURI();
++                return withUriQuery(uri, query);
++            }
++        };
++        Log.i(TAG, "Intercepting HTTP GET " + request.getURI().getPath() + " with " + query);
++
++        return execution.execute(wrapper, body);
++    }
++
++    private static void determineUsedJsonProperties(String entity) throws JsonProcessingException {
++        try {
++            Class<?> entityClass = Class.forName(DoctorFieldSelectHttpRequestInterceptor.class.getPackage().getName() + "." + StringUtils.capitalize(entity));
++            Field[] fields = entityClass.getDeclaredFields();
++            List<String> doctorFields = new ArrayList<>();
++            for (Field field : fields) {
++                if (field.isAnnotationPresent(JsonProperty.class)) {
++                    JsonProperty property = field.getAnnotation(JsonProperty.class);
++                    doctorFields.add(property.value());
++                }
++            }
++            String entityQuery = mapper.writeValueAsString(Select.fields(doctorFields.toArray(new String[doctorFields.size()])));
++            cachedFields.put(entity, entityQuery);
++        } catch (ClassNotFoundException e) {
++            e.printStackTrace();
++        }
++    }
++
++    private static URI withUriQuery(URI uri, String query) {
++        try {
++            return new URI(uri.getScheme(), uri.getUserInfo(), uri.getHost(), uri.getPort(), uri.getPath(), "q=" + query, uri.getFragment());
++        } catch (URISyntaxException e) {
++            throw new RuntimeException(e);
++        }
++    }
++}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/doctor/DoctorRestClient.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/doctor/DoctorRestClient.java
+new file mode 100644
+index 0000000..11300bf
+--- /dev/null
++++ b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/doctor/DoctorRestClient.java
+@@ -0,0 +1,32 @@
++package org.ovirt.mobile.movirt.sync.doctor;
++
++import org.androidannotations.annotations.rest.Accept;
++import org.androidannotations.annotations.rest.Get;
++import org.androidannotations.annotations.rest.Rest;
++import org.androidannotations.api.rest.MediaType;
++import org.androidannotations.api.rest.RestClientHeaders;
++import org.androidannotations.api.rest.RestClientRootUrl;
++import org.androidannotations.api.rest.RestClientSupport;
++import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
++
++import java.util.List;
++
++@Rest(converters = MappingJackson2HttpMessageConverter.class, interceptors = DoctorFieldSelectHttpRequestInterceptor.class)
++@Accept(MediaType.APPLICATION_JSON)
++public interface DoctorRestClient extends RestClientRootUrl, RestClientHeaders, RestClientSupport {
++
++    @Get("/entities/vm")
++    List<Vm> getVms();
++
++    @Get("/entities/vm/{id}")
++    Vm getVm(String id);
++
++    @Get("/entities/host")
++    List<Host> getHosts();
++
++    @Get("/entities/host/{id}")
++    Host getHost(String id);
++
++    @Get("/entities/cluster")
++    List<Cluster> getClusters();
++}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/doctor/DoctorSyncStrategy.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/doctor/DoctorSyncStrategy.java
+new file mode 100644
+index 0000000..5e18b76
+--- /dev/null
++++ b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/doctor/DoctorSyncStrategy.java
+@@ -0,0 +1,130 @@
++package org.ovirt.mobile.movirt.sync.doctor;
++
++import org.androidannotations.annotations.AfterInject;
++import org.androidannotations.annotations.Bean;
++import org.androidannotations.annotations.EBean;
++import org.androidannotations.annotations.rest.RestService;
++import org.ovirt.mobile.movirt.auth.MovirtAuthenticator;
++import org.ovirt.mobile.movirt.model.Cluster;
++import org.ovirt.mobile.movirt.model.Event;
++import org.ovirt.mobile.movirt.model.Host;
++import org.ovirt.mobile.movirt.model.Vm;
++import org.ovirt.mobile.movirt.sync.BaseSyncStrategy;
++import org.ovirt.mobile.movirt.sync.OvirtSimpleClientHttpRequestFactory;
++import org.ovirt.mobile.movirt.sync.Request;
++import org.ovirt.mobile.movirt.sync.Response;
++import org.ovirt.mobile.movirt.sync.rest.Disks;
++import org.ovirt.mobile.movirt.sync.rest.Nics;
++
++import java.util.List;
++
++@EBean
++public class DoctorSyncStrategy extends BaseSyncStrategy {
++
++    @RestService
++    DoctorRestClient restClient;
++
++    @Bean
++    OvirtSimpleClientHttpRequestFactory requestFactory;
++
++    @Bean
++    MovirtAuthenticator authenticator;
++
++    @AfterInject
++    void initClient() {
++        restClient.setHeader("Accept-Encoding", "gzip");
++        restClient.getRestTemplate().setRequestFactory(requestFactory);
++    }
++
++    public boolean isAvailable() {
++        return authenticator.useDoctorRest();
++    }
++
++    @Override
++    public void getVm(final String vmId, Response<Vm> response) {
++        fireRestRequest(new Request<Vm>() {
++            @Override
++            public Vm fire() {
++                return restClient.getVm(vmId).toEntity();
++            }
++        }, response);
++    }
++
++    @Override
++    public void getVms(Response<List<Vm>> response) {
++        fireRestRequest(new Request<List<Vm>>() {
++            @Override
++            public List<Vm> fire() {
++                return mapRestWrappers(restClient.getVms(), null);
++            }
++        }, response);
++    }
++
++    @Override
++    public void getHost(final String hostId, Response<Host> response) {
++        fireRestRequest(new Request<Host>() {
++            @Override
++            public Host fire() {
++                return restClient.getHost(hostId).toEntity();
++            }
++        }, response);
++    }
++
++    @Override
++    public void getHosts(Response<List<Host>> response) {
++        fireRestRequest(new Request<List<Host>>() {
++            @Override
++            public List<Host> fire() {
++                return mapRestWrappers(restClient.getHosts(), null);
++            }
++        }, response);
++    }
++
++    @Override
++    public void getDisks(String id, Response<Disks> response) {
++        throw new UnsupportedOperationException();
++    }
++
++    @Override
++    public void getClusters(Response<List<Cluster>> response) {
++        fireRestRequest(new Request<List<Cluster>>() {
++            @Override
++            public List<Cluster> fire() {
++                return mapRestWrappers(restClient.getClusters(), null);
++            }
++        }, response);
++    }
++
++    @Override
++    public void getNics(String id, Response<Nics> response) {
++        throw new UnsupportedOperationException();
++    }
++
++    @Override
++    public void getEventsSince(int lastEventId, Response<List<Event>> response) {
++        throw new UnsupportedOperationException();
++    }
++
++    private synchronized <T> void fireRestRequest(Request<T> request, Response<T> response) {
++        if (response != null) {
++            response.before();
++        }
++
++        try {
++            restClient.setRootUrl(authenticator.getDoctorRestUrl());
++            T result = request.fire();
++            if (response != null) {
++                response.onResponse(result);
++            }
++        } catch (Exception e) {
++            if (response != null){
++                fireConnectionError(e.getMessage());
++                response.onError();
++            }
++        } finally {
++            if (response != null) {
++                response.after();
++            }
++        }
++    }
++}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/doctor/Host.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/doctor/Host.java
+new file mode 100644
+index 0000000..fe4cd47
+--- /dev/null
++++ b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/doctor/Host.java
+@@ -0,0 +1,32 @@
++package org.ovirt.mobile.movirt.sync.doctor;
++
++import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
++import com.fasterxml.jackson.annotation.JsonProperty;
++
++import org.ovirt.mobile.movirt.sync.RestEntityWrapper;
++
++@JsonIgnoreProperties(ignoreUnknown = true)
++public class Host implements RestEntityWrapper<org.ovirt.mobile.movirt.model.Host> {
++
++    @JsonProperty("id")
++    public String id;
++
++    @JsonProperty("name")
++    public String name;
++
++    @JsonProperty("status/state")
++    public String status;
++
++    @JsonProperty("_links")
++    public Links links;
++
++    @Override
++    public org.ovirt.mobile.movirt.model.Host toEntity() {
++        org.ovirt.mobile.movirt.model.Host host = new org.ovirt.mobile.movirt.model.Host();
++        host.setId(id);
++        host.setName(name);
++        host.setStatus(org.ovirt.mobile.movirt.model.Host.Status.valueOf(status.toUpperCase()));
++        host.setClusterId(links.cluster);
++        return host;
++    }
++}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/doctor/Links.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/doctor/Links.java
+new file mode 100644
+index 0000000..72f90ba
+--- /dev/null
++++ b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/doctor/Links.java
+@@ -0,0 +1,8 @@
++package org.ovirt.mobile.movirt.sync.doctor;
++
++import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
++
++@JsonIgnoreProperties(ignoreUnknown = true)
++public class Links {
++    public String cluster;
++}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/doctor/Select.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/doctor/Select.java
+new file mode 100644
+index 0000000..6ae8105
+--- /dev/null
++++ b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/doctor/Select.java
+@@ -0,0 +1,13 @@
++package org.ovirt.mobile.movirt.sync.doctor;
++
++public class Select {
++    public String[] select;
++
++    public Select(String[] select) {
++        this.select = select;
++    }
++
++    public static Select fields(String ...fields) {
++        return new Select(fields);
++    }
++}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/doctor/Vm.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/doctor/Vm.java
+new file mode 100644
+index 0000000..ca1e13c
+--- /dev/null
++++ b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/doctor/Vm.java
+@@ -0,0 +1,91 @@
++package org.ovirt.mobile.movirt.sync.doctor;
++
++import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
++import com.fasterxml.jackson.annotation.JsonProperty;
++
++import org.ovirt.mobile.movirt.sync.RestEntityWrapper;
++
++import java.math.BigDecimal;
++import java.math.RoundingMode;
++
++@JsonIgnoreProperties(ignoreUnknown = true)
++public class Vm implements RestEntityWrapper<org.ovirt.mobile.movirt.model.Vm> {
++
++    @JsonProperty("id")
++    public String id;
++
++    @JsonProperty("name")
++    public String name;
++
++    @JsonProperty("memory")
++    public long memory;
++
++    @JsonProperty("status/state")
++    public String status;
++
++    @JsonProperty("cpu/topology/sockets")
++    public int sockets;
++
++    @JsonProperty("cpu/topology/cores")
++    public int cores;
++
++    @JsonProperty("cpu/current/total")
++    public int totalCpu;
++
++    @JsonProperty("memory/installed")
++    public long memoryInstalled;
++
++    @JsonProperty("memory/used")
++    public long memoryUsed;
++
++    @JsonProperty("os/type")
++    public String osType;
++
++    @JsonProperty("display/address")
++    public String displayAddress;
++
++    @JsonProperty("display/port")
++    public String displayPort;
++
++    @JsonProperty("display/type")
++    public String displayType;
++
++    @JsonProperty("_links")
++    public Links links;
++
++    @Override
++    public org.ovirt.mobile.movirt.model.Vm toEntity() {
++        org.ovirt.mobile.movirt.model.Vm vm = new org.ovirt.mobile.movirt.model.Vm();
++        vm.setId(id);
++        vm.setName(name);
++        vm.setStatus(org.ovirt.mobile.movirt.model.Vm.Status.valueOf(status.toUpperCase()));
++        vm.setClusterId(links.cluster);
++
++        BigDecimal totalMemory = BigDecimal.valueOf(memoryInstalled);
++        BigDecimal usedMemory = BigDecimal.valueOf(memoryUsed);
++
++        vm.setCpuUsage(BigDecimal.valueOf(totalCpu).doubleValue());
++        if (BigDecimal.ZERO.equals(totalMemory)) {
++            vm.setMemoryUsage(0);
++        } else {
++            vm.setMemoryUsage(100 * usedMemory.divide(totalMemory, 3, RoundingMode.HALF_UP).doubleValue());
++        }
++
++
++        vm.setMemorySizeMb(memory);
++        vm.setSockets(sockets);
++        vm.setCoresPerSocket(cores);
++
++        vm.setOsType(osType);
++
++        vm.setDisplayType(org.ovirt.mobile.movirt.model.Vm.Display.valueOf(displayType.toUpperCase()));
++        vm.setDisplayAddress(displayAddress);
++        try {
++            vm.setDisplayPort(Integer.parseInt(displayPort));
++        } catch (Exception e) {
++            vm.setDisplayPort(-1);
++        }
++
++        return vm;
++    }
++}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Action.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Action.java
+new file mode 100644
+index 0000000..30821f2
+--- /dev/null
++++ b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Action.java
+@@ -0,0 +1,7 @@
++package org.ovirt.mobile.movirt.sync.rest;
++
++import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
++
++@JsonIgnoreProperties(ignoreUnknown = true)
++class Action {
++}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/ActionTicket.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/ActionTicket.java
+new file mode 100644
+index 0000000..35d3de8
+--- /dev/null
++++ b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/ActionTicket.java
+@@ -0,0 +1,18 @@
++package org.ovirt.mobile.movirt.sync.rest;
++
++import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
++import com.fasterxml.jackson.annotation.JsonRootName;
++
++/**
++ * Created by sphoorti on 16/1/15.
++ */
++@JsonRootName("action")
++@JsonIgnoreProperties(ignoreUnknown = true)
++public class ActionTicket {
++    public Ticket ticket;
++
++    @JsonIgnoreProperties(ignoreUnknown = true)
++    public static class Ticket {
++      public String value;
++    }
++}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Cluster.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Cluster.java
+new file mode 100644
+index 0000000..844fda4
+--- /dev/null
++++ b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Cluster.java
+@@ -0,0 +1,21 @@
++package org.ovirt.mobile.movirt.sync.rest;
++
++import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
++
++import org.ovirt.mobile.movirt.sync.RestEntityWrapper;
++
++@JsonIgnoreProperties(ignoreUnknown = true)
++class Cluster implements RestEntityWrapper<org.ovirt.mobile.movirt.model.Cluster> {
++    // public for json mapping
++    public String id;
++    public String name;
++
++    @Override
++    public org.ovirt.mobile.movirt.model.Cluster toEntity() {
++        org.ovirt.mobile.movirt.model.Cluster cluster = new org.ovirt.mobile.movirt.model.Cluster();
++        cluster.setId(id);
++        cluster.setName(name);
++
++        return cluster;
++    }
++}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Clusters.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Clusters.java
+new file mode 100644
+index 0000000..46fe7bc
+--- /dev/null
++++ b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Clusters.java
+@@ -0,0 +1,7 @@
++package org.ovirt.mobile.movirt.sync.rest;
++
++import java.util.List;
++
++public class Clusters {
++    public List<Cluster> cluster;
++}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Disk.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Disk.java
+new file mode 100644
+index 0000000..5157de6
+--- /dev/null
++++ b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Disk.java
+@@ -0,0 +1,18 @@
++package org.ovirt.mobile.movirt.sync.rest;
++
++import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
++
++/**
++ * Created by sphoorti on 5/2/15.
++ */
++@JsonIgnoreProperties(ignoreUnknown = true)
++public class Disk {
++    public String name;
++    public String size;
++    public Status status;
++
++    @JsonIgnoreProperties(ignoreUnknown = true)
++    public class Status {
++        public String state;
++    }
++}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Disks.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Disks.java
+new file mode 100644
+index 0000000..2172037
+--- /dev/null
++++ b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Disks.java
+@@ -0,0 +1,10 @@
++package org.ovirt.mobile.movirt.sync.rest;
++
++import java.util.List;
++
++/**
++ * Created by sphoorti on 9/2/15.
++ */
++public class Disks {
++    public List<Disk> disk;
++}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/EmptyResult.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/EmptyResult.java
+new file mode 100644
+index 0000000..332849b
+--- /dev/null
++++ b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/EmptyResult.java
+@@ -0,0 +1,7 @@
++package org.ovirt.mobile.movirt.sync.rest;
++
++import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
++
++@JsonIgnoreProperties(ignoreUnknown = true)
++public class EmptyResult {
++}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/ErrorBody.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/ErrorBody.java
+new file mode 100644
+index 0000000..10e527f
+--- /dev/null
++++ b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/ErrorBody.java
+@@ -0,0 +1,16 @@
++package org.ovirt.mobile.movirt.sync.rest;
++
++import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
++
++@JsonIgnoreProperties(ignoreUnknown = true)
++public class ErrorBody {
++    public Fault fault;
++
++    @JsonIgnoreProperties(ignoreUnknown = true)
++    public static class Fault {
++
++        public String reason;
++
++        public String detail;
++    }
++}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Event.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Event.java
+new file mode 100644
+index 0000000..dcda41f
+--- /dev/null
++++ b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Event.java
+@@ -0,0 +1,43 @@
++package org.ovirt.mobile.movirt.sync.rest;
++
++import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
++
++import org.ovirt.mobile.movirt.sync.RestEntityWrapper;
++
++import java.sql.Timestamp;
++
++@JsonIgnoreProperties(ignoreUnknown = true)
++class Event implements RestEntityWrapper<org.ovirt.mobile.movirt.model.Event> {
++    public int id;
++    public int code;
++    public String description;
++    public String severity;
++    public long time;
++
++    public IdRef vm;
++    public IdRef host;
++    public IdRef cluster;
++    public IdRef data_center;
++    public IdRef storage_domain;
++
++    @JsonIgnoreProperties(ignoreUnknown = true)
++    static class IdRef {
++        public String id;
++    }
++
++    @Override
++    public org.ovirt.mobile.movirt.model.Event toEntity() {
++        org.ovirt.mobile.movirt.model.Event event = new org.ovirt.mobile.movirt.model.Event();
++        event.setId(id);
++        event.setCode(code);
++        event.setDescription(description);
++        event.setSeverity(org.ovirt.mobile.movirt.model.Event.Severity.valueOf(severity.toUpperCase()));
++        event.setTime(new Timestamp(time));
++        if (vm != null) event.setVmId(vm.id);
++        if (host != null) event.setHostId(host.id);
++        if (cluster != null) event.setClusterId(cluster.id);
++        if (storage_domain != null) event.setStorageDomainId(storage_domain.id);
++        if (data_center != null) event.setDataCenterId(data_center.id);
++        return event;
++    }
++}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Events.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Events.java
+new file mode 100644
+index 0000000..cc06d19
+--- /dev/null
++++ b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Events.java
+@@ -0,0 +1,7 @@
++package org.ovirt.mobile.movirt.sync.rest;
++
++import java.util.List;
++
++class Events {
++    public List<Event> event;
++}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Host.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Host.java
+new file mode 100644
+index 0000000..941ffd5
+--- /dev/null
++++ b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Host.java
+@@ -0,0 +1,30 @@
++package org.ovirt.mobile.movirt.sync.rest;
++
++import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
++
++import org.ovirt.mobile.movirt.sync.RestEntityWrapper;
++
++@JsonIgnoreProperties(ignoreUnknown = true)
++class Host implements RestEntityWrapper<org.ovirt.mobile.movirt.model.Host> {
++
++    // public for json mapping
++    public String id;
++    public String name;
++    public Status status;
++    public Cluster cluster;
++
++    @Override
++    public org.ovirt.mobile.movirt.model.Host toEntity() {
++        org.ovirt.mobile.movirt.model.Host host = new org.ovirt.mobile.movirt.model.Host();
++        host.setId(id);
++        host.setName(name);
++        host.setStatus(mapStatus(status.state));
++        host.setClusterId(cluster.id);
++
++        return host;
++    }
++
++    private static org.ovirt.mobile.movirt.model.Host.Status mapStatus(String state) {
++        return org.ovirt.mobile.movirt.model.Host.Status.valueOf(state.toUpperCase());
++    }
++}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Hosts.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Hosts.java
+new file mode 100644
+index 0000000..30a1696
+--- /dev/null
++++ b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Hosts.java
+@@ -0,0 +1,7 @@
++package org.ovirt.mobile.movirt.sync.rest;
++
++import java.util.List;
++
++class Hosts {
++    public List<Host> host;
++}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Nic.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Nic.java
+new file mode 100644
+index 0000000..605ac1a
+--- /dev/null
++++ b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Nic.java
+@@ -0,0 +1,21 @@
++package org.ovirt.mobile.movirt.sync.rest;
++
++import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
++
++/**
++ * Created by yixin on 2015/3/24.
++ */
++@JsonIgnoreProperties(ignoreUnknown = true)
++public class Nic {
++    public String name;
++    public boolean linked;
++    public Mac mac;
++    public boolean active;
++    public boolean plugged;
++
++    @JsonIgnoreProperties(ignoreUnknown = true)
++    public static class Mac {
++        public String address;
++    }
++
++}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Nics.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Nics.java
+new file mode 100644
+index 0000000..9bef9be
+--- /dev/null
++++ b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Nics.java
+@@ -0,0 +1,10 @@
++package org.ovirt.mobile.movirt.sync.rest;
++
++import java.util.List;
++
++/**
++ * Created by yixin on 2015/3/24.
++ */
++public class Nics {
++    public List<Nic> nic;
++}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/OVirtRestClient.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/OVirtRestClient.java
+new file mode 100644
+index 0000000..91bbe00
+--- /dev/null
++++ b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/OVirtRestClient.java
+@@ -0,0 +1,77 @@
++package org.ovirt.mobile.movirt.sync.rest;
++
++import org.androidannotations.annotations.rest.Accept;
++import org.androidannotations.annotations.rest.Get;
++import org.androidannotations.annotations.rest.Post;
++import org.androidannotations.annotations.rest.RequiresAuthentication;
++import org.androidannotations.annotations.rest.RequiresCookie;
++import org.androidannotations.annotations.rest.RequiresHeader;
++import org.androidannotations.annotations.rest.Rest;
++import org.androidannotations.annotations.rest.SetsCookie;
++import org.androidannotations.api.rest.MediaType;
++import org.androidannotations.api.rest.RestClientHeaders;
++import org.androidannotations.api.rest.RestClientRootUrl;
++import org.androidannotations.api.rest.RestClientSupport;
++import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
++
++@Rest(converters = MappingJackson2HttpMessageConverter.class)
++@Accept(MediaType.APPLICATION_JSON + "; detail=statistics")
++@RequiresHeader({"Filter", "Accept-Encoding", "Session-TTL", "Prefer"})
++@SetsCookie("JSESSIONID")
++@RequiresCookie("JSESSIONID")
++@RequiresAuthentication
++public interface OVirtRestClient extends RestClientRootUrl, RestClientHeaders, RestClientSupport {
++
++    @Get("/vms;max={maxToLoad}")
++    Vms getVms(int maxToLoad);
++
++    @Get("/vms;max={maxToLoad}?search={query}")
++    Vms getVms(String query, int maxToLoad);
++
++    @Get("/vms/{id}/statistics")
++    Statistics getVmStatistics(String id);
++
++    @Post("/vms/{id}/start")
++    void startVm(Action action, String id);
++
++    @Post("/vms/{id}/stop")
++    void stopVm(Action action, String id);
++
++    @Post("/vms/{id}/reboot")
++    void rebootVm(Action action, String id);
++
++    @Get("/clusters")
++    Clusters getClusters();
++
++    @Get("/events;max={maxToLoad}?from={lastEventId}&search=sortby time desc")
++    Events getEventsSince(String lastEventId, int maxToLoad);
++
++    @Get("/events;max={maxToLoad}?from={lastEventId}&search={query}")
++    Events getEventsSince(String lastEventId, String query, int maxToLoad);
++
++    @Get("/vms/{id}")
++    Vm getVm(String id);
++
++    @Post("/vms/{id}/ticket")
++    ActionTicket getConsoleTicket(Action action, String id);
++
++    @Get("/vms/{id}/disks")
++    Disks getDisks(String id);
++
++    @Get("/vms/{id}/nics")
++    Nics getNics(String id);
++
++    @Get("/hosts")
++    Hosts getHosts();
++
++    @Get("/hosts/{id}")
++    Host getHost(String id);
++
++    @Get("/")
++    EmptyResult login();
++
++    void setCookie(String name, String value);
++
++    String getCookie(String name);
++
++}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/OVirtRestSyncStrategy.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/OVirtRestSyncStrategy.java
+new file mode 100644
+index 0000000..3460595
+--- /dev/null
++++ b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/OVirtRestSyncStrategy.java
+@@ -0,0 +1,456 @@
++package org.ovirt.mobile.movirt.sync.rest;
++
++import android.accounts.AccountManager;
++import android.accounts.AccountManagerFuture;
++import android.content.Intent;
++import android.os.Bundle;
++import android.preference.PreferenceManager;
++import android.text.TextUtils;
++
++import com.fasterxml.jackson.databind.ObjectMapper;
++
++import org.androidannotations.annotations.AfterInject;
++import org.androidannotations.annotations.App;
++import org.androidannotations.annotations.Bean;
++import org.androidannotations.annotations.EBean;
++import org.androidannotations.annotations.SystemService;
++import org.androidannotations.annotations.res.StringRes;
++import org.androidannotations.annotations.rest.RestService;
++import org.ovirt.mobile.movirt.Broadcasts;
++import org.ovirt.mobile.movirt.MoVirtApp;
++import org.ovirt.mobile.movirt.R;
++import org.ovirt.mobile.movirt.auth.MovirtAuthenticator;
++import org.ovirt.mobile.movirt.model.Cluster;
++import org.ovirt.mobile.movirt.model.Host;
++import org.ovirt.mobile.movirt.sync.ActionStrategy;
++import org.ovirt.mobile.movirt.sync.BaseSyncStrategy;
++import org.ovirt.mobile.movirt.sync.EventsHandler;
++import org.ovirt.mobile.movirt.sync.OvirtSimpleClientHttpRequestFactory;
++import org.ovirt.mobile.movirt.sync.Request;
++import org.ovirt.mobile.movirt.sync.Response;
++import org.ovirt.mobile.movirt.ui.AuthenticatorActivity_;
++import org.springframework.core.NestedRuntimeException;
++import org.springframework.http.HttpAuthentication;
++import org.springframework.http.HttpStatus;
++import org.springframework.web.client.HttpClientErrorException;
++
++import java.io.IOException;
++import java.util.ArrayList;
++import java.util.List;
++
++@EBean
++public class OVirtRestSyncStrategy extends BaseSyncStrategy implements ActionStrategy {
++
++    public static final String JSESSIONID = "JSESSIONID";
++    public static final String FILTER = "Filter";
++    public static final String PREFER = "Prefer";
++
++    ObjectMapper mapper = new ObjectMapper();
++
++    @RestService
++    OVirtRestClient restClient;
++
++    @Bean
++    OvirtSimpleClientHttpRequestFactory requestFactory;
++
++    @Bean
++    MovirtAuthenticator authenticator;
++
++    @SystemService
++    AccountManager accountManager;
++
++    @App
++    MoVirtApp app;
++
++    @StringRes(R.string.rest_request_failed)
++    String errorMsg;
++
++    @AfterInject
++    void initClient() {
++        restClient.setHeader("Accept-Encoding", "gzip");
++
++        restClient.getRestTemplate().setRequestFactory(requestFactory);
++    }
++
++    @Override
++    public void startVm(final String vmId) {
++        fireRestRequest(new Request<Void>() {
++            @Override
++            public Void fire() {
++                restClient.startVm(new Action(), vmId);
++                return null;
++            }
++        }, null);
++    }
++
++    @Override
++    public void stopVm(final String vmId) {
++        fireRestRequest(new Request<Void>() {
++            @Override
++            public Void fire() {
++                restClient.stopVm(new Action(), vmId);
++                return null;
++            }
++        }, null);
++
++    }
++
++    @Override
++    public void rebootVm(final String vmId) {
++        fireRestRequest(new Request<Void>() {
++            @Override
++            public Void fire() {
++                restClient.rebootVm(new Action(), vmId);
++                return null;
++            }
++        }, null);
++    }
++
++    @Override
++    public void getVm(final String vmId, Response<org.ovirt.mobile.movirt.model.Vm> response) {
++        fireRestRequest(new Request<org.ovirt.mobile.movirt.model.Vm>() {
++            @Override
++            public org.ovirt.mobile.movirt.model.Vm fire() {
++                return restClient.getVm(vmId).toEntity();
++            }
++        }, response);
++    }
++
++    @Override
++    public void getHost(final String hostId, Response<org.ovirt.mobile.movirt.model.Host> response) {
++        fireRestRequest(new Request<org.ovirt.mobile.movirt.model.Host>() {
++            @Override
++            public org.ovirt.mobile.movirt.model.Host fire() {
++                return restClient.getHost(hostId).toEntity();
++            }
++        }, response);
++    }
++
++    @Override
++    public void getConsoleTicket(final String vmId, Response<ActionTicket> response) {
++        fireRestRequest(new Request<ActionTicket>() {
++            @Override
++            public ActionTicket fire() {
++                return restClient.getConsoleTicket(new Action(), vmId);
++            }
++        }, response);
++    }
++
++    @Override
++    public void getDisks(final String id, Response<Disks> response) {
++        fireRestRequest(new Request<Disks>() {
++            @Override
++            public Disks fire() {
++                return restClient.getDisks(id);
++            }
++        }, response);
++    }
++
++    @Override
++    public void getVms(Response<List<org.ovirt.mobile.movirt.model.Vm>> response) {
++        fireRestRequest(new Request<List<org.ovirt.mobile.movirt.model.Vm>>() {
++            @Override
++            public List<org.ovirt.mobile.movirt.model.Vm> fire() {
++                Vms loadedVms = null;
++                if (authenticator.hasAdminPermissions()) {
++                    int maxVms = asIntWithDefault("max_vms_polled", "-1");
++                    String query = PreferenceManager.getDefaultSharedPreferences(app).getString("vms_search_query", "");
++                    if (!"".equals(query)) {
++                        loadedVms = restClient.getVms(query, maxVms);
++                    } else {
++                        loadedVms = restClient.getVms(maxVms);
++                    }
++
++                } else {
++                    loadedVms = restClient.getVms(-1);
++                }
++
++                if (loadedVms == null) {
++                    return new ArrayList<>();
++                }
++
++                return mapRestWrappers(loadedVms.vm, null);
++            }
++        }, response);
++    }
++
++    @Override
++    public void getClusters(Response<List<org.ovirt.mobile.movirt.model.Cluster>> response) {
++        fireRestRequest(new Request<List<org.ovirt.mobile.movirt.model.Cluster>>() {
++            @Override
++            public List<Cluster> fire() {
++                Clusters loadedClusters = restClient.getClusters();
++                if (loadedClusters == null) {
++                    return new ArrayList<>();
++                }
++
++                return mapRestWrappers(loadedClusters.cluster, null);
++            }
++        }, response);
++    }
++
++    @Override
++    public void getNics(final String id, Response<Nics> response) {
++        fireRestRequest(new Request<Nics>() {
++            @Override
++            public Nics fire() {
++                return restClient.getNics(id);
++            }
++        }, response);
++    }
++
++    @Override
++    public void getHosts(Response<List<org.ovirt.mobile.movirt.model.Host>> response) {
++        fireRestRequest(new Request<List<org.ovirt.mobile.movirt.model.Host>>() {
++            @Override
++            public List<Host> fire() {
++                Hosts loadedHosts = restClient.getHosts();
++                if (loadedHosts == null) {
++                    return new ArrayList<>();
++                }
++
++                return mapRestWrappers(loadedHosts.host, null);
++            }
++        }, response);
++    }
++
++    @Override
++    public String login(String apiUrl, String username, String password, boolean disableHttps, boolean hasAdminPrivileges) {
++        setPersistentAuthHeaders();
++        restClient.setRootUrl(apiUrl);
++        restClient.setHttpBasicAuth(username, password);
++        restClient.setCookie("JSESSIONID", "");
++        requestFactory.setIgnoreHttps(disableHttps);
++        restClient.setHeader(FILTER, Boolean.toString(!hasAdminPrivileges));
++        restClient.login();
++        String sessionId = restClient.getCookie("JSESSIONID");
++        restClient.setHttpBasicAuth("", "");
++        return sessionId;
++    }
++
++    public void getEventsSince(final int lastEventId, Response<List<org.ovirt.mobile.movirt.model.Event>> response) {
++        fireRestRequest(new Request<List<org.ovirt.mobile.movirt.model.Event>>() {
++            @Override
++            public List<org.ovirt.mobile.movirt.model.Event> fire() {
++                Events loadedEvents = null;
++
++                if (authenticator.hasAdminPermissions()) {
++                    int maxEventsStored = asIntWithDefault("max_events_stored", EventsHandler.MAX_EVENTS_LOCALLY);
++
++                    String query = PreferenceManager.getDefaultSharedPreferences(app).getString("events_search_query", "");
++                    if (!"".equals(query)) {
++                        loadedEvents = restClient.getEventsSince(Integer.toString(lastEventId), query, maxEventsStored);
++                    } else {
++                        loadedEvents = restClient.getEventsSince(Integer.toString(lastEventId), maxEventsStored);
++                    }
++                } else {
++                    loadedEvents = restClient.getEventsSince(Integer.toString(lastEventId), -1);
++                }
++
++
++                if (loadedEvents == null) {
++                    return new ArrayList<>();
++                }
++
++                return mapRestWrappers(loadedEvents.event, new WrapPredicate<org.ovirt.mobile.movirt.sync.rest.Event>() {
++                    @Override
++                    public boolean toWrap(org.ovirt.mobile.movirt.sync.rest.Event entity) {
++                        return entity.id > lastEventId;
++                    }
++                });
++            }
++        }, response);
++    }
++
++    /**
++     * has to be synced because of error handling - otherwise it would not be possible to bind the error
++     */
++    private synchronized <T> void fireRestRequest(final Request<T> request, final Response<T> response) {
++        if (authenticator.enforceBasicAuth()) {
++            fireRequestWithHttpBasicAuth(request, response);
++        } else {
++            fireRequestWithPersistentAuth(request, response);
++        }
++    }
++
++    private <T> void fireRequestWithHttpBasicAuth(Request<T> request, Response<T> response) {
++        String userName = authenticator.getUserName();
++        String password = authenticator.getPassword();
++
++        boolean success = false;
++
++        if (TextUtils.isEmpty(userName) || TextUtils.isEmpty(password) || TextUtils.isEmpty(authenticator.getApiUrl())) {
++            Intent accountAuthenticatorResponse = new Intent(context, AuthenticatorActivity_.class);
++            Intent editConnectionIntent = new Intent(Broadcasts.NO_CONNECTION_SPEFICIED);
++            editConnectionIntent.putExtra(AccountManager.KEY_INTENT, accountAuthenticatorResponse);
++            context.sendBroadcast(editConnectionIntent);
++        } else {
++            updateClientBeforeCall();
++            restClient.setHttpBasicAuth(userName, password);
++            restClient.setHeader(PREFER, "");
++            restClient.setHeader(JSESSIONID, "");
++
++            if (response != null) {
++                response.before();
++            }
++
++            try {
++                T restResponse = request.fire();
++                success = true;
++                if (response != null) {
++                    response.onResponse(restResponse);
++                }
++            } catch (Exception e) {
++                fireConnectionError(e);
++            } finally {
++                if (!success && response != null) {
++                    response.onError();
++                }
++                if (response != null) {
++                    response.after();
++                }
++            }
++
++        }
++
++    }
++
++    private <T> void fireRequestWithPersistentAuth(Request<T> request, Response<T> response) {
++        if (response != null) {
++            response.before();
++        }
++
++        RestCallResult result = doFireRequestWithPersistentAuth(request, response);
++        if (result == RestCallResult.AUTH_ERROR) {
++            // if it is an expired session it has been cleared - try again.
++            // If the credentials were filled well, now it will pass
++            result = doFireRequestWithPersistentAuth(request, response);
++        }
++
++        if (result != RestCallResult.SUCCESS && response != null) {
++            response.onError();
++        }
++
++        if (response != null) {
++            response.after();
++        }
++    }
++
++    private <T> RestCallResult doFireRequestWithPersistentAuth(Request<T> request, Response<T> response) {
++        AccountManagerFuture<Bundle> resp = accountManager.getAuthToken(MovirtAuthenticator.MOVIRT_ACCOUNT, MovirtAuthenticator.AUTH_TOKEN_TYPE, null, false, null, null);
++
++        boolean success = false;
++
++        try {
++            Bundle result = resp.getResult();
++            if (result.containsKey(AccountManager.KEY_AUTHTOKEN)) {
++                String authToken = result.getString(AccountManager.KEY_AUTHTOKEN);
++
++                if (TextUtils.isEmpty(authToken)) {
++                    fireConnectionError("Empty auth token");
++                } else {
++                    restClient.setCookie(JSESSIONID, authToken);
++                    restClient.setAuthentication(new HttpAuthentication() {
++                        @Override
++                        public String getHeaderValue() {
++                            // empty authentication - e.g. not the basic one
++                            return "";
++                        }
++                    });
++
++                    updateClientBeforeCall();
++
++                    setPersistentAuthHeaders();
++
++                    try {
++                        T restResponse = request.fire();
++                        success = true;
++                        if (response != null) {
++                            response.onResponse(restResponse);
++                        }
++                        return RestCallResult.SUCCESS;
++
++                    } catch (NestedRuntimeException e) {
++                        HttpStatus statusCode = null;
++                        if (e instanceof HttpClientErrorException) {
++                            statusCode = ((HttpClientErrorException) e).getStatusCode();
++                        }
++
++                        if (statusCode == HttpStatus.UNAUTHORIZED) {
++                            // ok, session id is not valid anymore - invalidate it
++                            accountManager.invalidateAuthToken(MovirtAuthenticator.AUTH_TOKEN_TYPE, authToken);
++                            accountManager.setAuthToken(MovirtAuthenticator.MOVIRT_ACCOUNT, MovirtAuthenticator.AUTH_TOKEN_TYPE, null);
++                            return RestCallResult.AUTH_ERROR;
++                        } else {
++                            fireConnectionError(e);
++                            return RestCallResult.OTHER_ERROR;
++                        }
++                    }
++
++                }
++            } else if (result.containsKey(AccountManager.KEY_INTENT)) {
++                Intent accountAuthenticatorResponse = result.getParcelable(AccountManager.KEY_INTENT);
++                Intent editConnectionIntent = new Intent(Broadcasts.NO_CONNECTION_SPEFICIED);
++                editConnectionIntent.putExtra(AccountManager.KEY_INTENT, accountAuthenticatorResponse);
++                context.sendBroadcast(editConnectionIntent);
++
++                return RestCallResult.OTHER_ERROR;
++            }
++        } catch (Exception e) {
++            fireConnectionError(e);
++        }
++
++        if (!success) {
++            return RestCallResult.OTHER_ERROR;
++        } else {
++            return RestCallResult.SUCCESS;
++        }
++
++    }
++
++    enum RestCallResult {
++        SUCCESS,
++        AUTH_ERROR,
++        OTHER_ERROR
++    }
++
++    private int asIntWithDefault(String key, String defaultResult) {
++        String maxEventsLocallyStr = PreferenceManager.getDefaultSharedPreferences(app).getString(key, defaultResult);
++        try {
++            return Integer.parseInt(maxEventsLocallyStr);
++        } catch (NumberFormatException e) {
++            return Integer.parseInt(defaultResult);
++        }
++    }
++
++    private void fireConnectionError(Exception e) {
++        String msg = e.getMessage();
++        if (e instanceof HttpClientErrorException) {
++
++            String responseBody = ((HttpClientErrorException) e).getResponseBodyAsString();
++            if (!TextUtils.isEmpty(responseBody)) {
++
++                try {
++                    ErrorBody errorBody = mapper.readValue(((HttpClientErrorException) e).getResponseBodyAsByteArray(), ErrorBody.class);
++                    msg = msg + " " + errorBody.fault.reason + " " + errorBody.fault.detail;
++                } catch (IOException e1) {
++                    msg = msg + ": " + responseBody;
++                }
++
++            }
++        }
++
++        fireConnectionError(String.format(errorMsg, msg));
++    }
++
++    private void setPersistentAuthHeaders() {
++        restClient.setHeader("Session-TTL", "120"); // 2h
++        restClient.setHeader("Prefer", "persistent-auth, csrf-protection");
++    }
++
++    private void updateClientBeforeCall() {
++        restClient.setHeader(FILTER, Boolean.toString(!authenticator.hasAdminPermissions()));
++        requestFactory.setIgnoreHttps(authenticator.disableHttps());
++        restClient.setRootUrl(authenticator.getApiUrl());
++    }
++}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Statistic.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Statistic.java
+new file mode 100644
+index 0000000..a92054d
+--- /dev/null
++++ b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Statistic.java
+@@ -0,0 +1,20 @@
++package org.ovirt.mobile.movirt.sync.rest;
++
++import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
++
++import java.util.List;
++
++@JsonIgnoreProperties(ignoreUnknown = true)
++class Statistic {
++    public String name;
++    public Values values;
++
++    static class Values {
++        public List<Value> value;
++        public String type;
++    }
++
++    static class Value {
++        public String datum;
++    }
++}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Statistics.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Statistics.java
+new file mode 100644
+index 0000000..60e5142
+--- /dev/null
++++ b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Statistics.java
+@@ -0,0 +1,7 @@
++package org.ovirt.mobile.movirt.sync.rest;
++
++import java.util.List;
++
++class Statistics {
++    public List<Statistic> statistic;
++}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Status.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Status.java
+new file mode 100644
+index 0000000..22d79f2
+--- /dev/null
++++ b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Status.java
+@@ -0,0 +1,9 @@
++package org.ovirt.mobile.movirt.sync.rest;
++
++import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
++
++// status complex object in rest
++@JsonIgnoreProperties(ignoreUnknown = true)
++public class Status {
++    public String state;
++}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Topology.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Topology.java
+new file mode 100644
+index 0000000..7b04955
+--- /dev/null
++++ b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Topology.java
+@@ -0,0 +1,11 @@
++package org.ovirt.mobile.movirt.sync.rest;
++
++import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
++
++/**
++ * Created by sphoorti on 28/1/15.
++ */
++@JsonIgnoreProperties(ignoreUnknown = true)
++public class Topology {
++    public String sockets, cores;
++}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Vm.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Vm.java
+new file mode 100644
+index 0000000..c3049ff
+--- /dev/null
++++ b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Vm.java
+@@ -0,0 +1,108 @@
++package org.ovirt.mobile.movirt.sync.rest;
++
++import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
++
++import org.ovirt.mobile.movirt.sync.RestEntityWrapper;
++
++import java.math.BigDecimal;
++import java.math.RoundingMode;
++import java.util.List;
++
++@JsonIgnoreProperties(ignoreUnknown = true)
++public class Vm implements RestEntityWrapper<org.ovirt.mobile.movirt.model.Vm> {
++
++    private static final String CPU_PERCENTAGE_STAT = "cpu.current.total";
++    private static final String TOTAL_MEMORY_STAT = "memory.installed";
++    private static final String USED_MEMORY_STAT = "memory.used";
++
++    // public for json mapping
++    public String id;
++    public String name;
++    public Status status;
++    public Cluster cluster;
++    public Statistics statistics;
++    public String memory;
++    public Display display;
++    public Os os;
++    public Cpu cpu;
++
++    @JsonIgnoreProperties(ignoreUnknown = true)
++    public static class Display {
++        public String address, port, type;
++    }
++
++    @JsonIgnoreProperties(ignoreUnknown = true)
++    public static class Os {
++        public String type;
++    }
++
++    @JsonIgnoreProperties(ignoreUnknown = true)
++    public static class Cpu {
++        public Topology topology;
++    }
++
++    @Override
++    public String toString() {
++        return String.format("Vm: name=%s, id=%s, status=%s, clusterId=%s",
++                             name, id, status.state, cluster.id);
++    }
++
++    public org.ovirt.mobile.movirt.model.Vm toEntity() {
++        org.ovirt.mobile.movirt.model.Vm vm = new org.ovirt.mobile.movirt.model.Vm();
++        vm.setId(id);
++        vm.setName(name);
++        vm.setStatus(mapStatus(status.state));
++        vm.setClusterId(cluster.id);
++
++        if (statistics != null && statistics.statistic != null) {
++            BigDecimal cpu = getStatisticValueByName(CPU_PERCENTAGE_STAT, statistics.statistic);
++            BigDecimal totalMemory = getStatisticValueByName(TOTAL_MEMORY_STAT, statistics.statistic);
++            BigDecimal usedMemory = getStatisticValueByName(USED_MEMORY_STAT, statistics.statistic);
++
++            vm.setCpuUsage(cpu.doubleValue());
++            if (BigDecimal.ZERO.equals(totalMemory)) {
++                vm.setMemoryUsage(0);
++            } else {
++                vm.setMemoryUsage(100 * usedMemory.divide(totalMemory, 3, RoundingMode.HALF_UP).doubleValue());
++            }
++        }
++
++        try {
++            vm.setMemorySizeMb(Long.parseLong(memory) / (1024 * 1024));
++        } catch (Exception e) {
++            vm.setMemorySizeMb(-1);
++        }
++
++        vm.setSockets(Integer.parseInt(cpu.topology.sockets));
++        vm.setCoresPerSocket(Integer.parseInt(cpu.topology.cores));
++
++        vm.setOsType(os.type);
++
++        vm.setDisplayType(mapDisplay(display.type));
++        vm.setDisplayAddress(display.address);
++        try {
++            vm.setDisplayPort(Integer.parseInt(display.port));
++        } catch (Exception e) {
++            vm.setDisplayPort(-1);
++        }
++
++        return vm;
++    }
++
++    private static org.ovirt.mobile.movirt.model.Vm.Status mapStatus(String status) {
++        return org.ovirt.mobile.movirt.model.Vm.Status.valueOf(status.toUpperCase());
++    }
++
++    private static org.ovirt.mobile.movirt.model.Vm.Display mapDisplay(String display) {
++        return org.ovirt.mobile.movirt.model.Vm.Display.valueOf(display.toUpperCase());
++    }
++
++    private static BigDecimal getStatisticValueByName(String name, List<Statistic> statistics) {
++        for (Statistic statistic : statistics) {
++            if (name.equals(statistic.name)) {
++                return new BigDecimal(statistic.values.value.get(0).datum);
++            }
++        }
++        return BigDecimal.ZERO;
++    }
++}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Vms.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Vms.java
+new file mode 100644
+index 0000000..5bceb82
+--- /dev/null
++++ b/moVirt/src/main/java/org/ovirt/mobile/movirt/sync/rest/Vms.java
+@@ -0,0 +1,7 @@
++package org.ovirt.mobile.movirt.sync.rest;
++
++import java.util.List;
++
++class Vms {
++    public List<Vm> vm;
++}
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/ui/AuthenticatorActivity.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/ui/AuthenticatorActivity.java
+index 55acda6..1a0cb78 100644
+--- a/moVirt/src/main/java/org/ovirt/mobile/movirt/ui/AuthenticatorActivity.java
++++ b/moVirt/src/main/java/org/ovirt/mobile/movirt/ui/AuthenticatorActivity.java
+@@ -15,6 +15,7 @@
+ import org.androidannotations.annotations.AfterViews;
+ import org.androidannotations.annotations.Background;
+ import org.androidannotations.annotations.Bean;
++import org.androidannotations.annotations.CheckedChange;
+ import org.androidannotations.annotations.Click;
+ import org.androidannotations.annotations.EActivity;
+ import org.androidannotations.annotations.Receiver;
+@@ -24,8 +25,9 @@
+ import org.ovirt.mobile.movirt.Broadcasts;
+ import org.ovirt.mobile.movirt.R;
+ import org.ovirt.mobile.movirt.auth.MovirtAuthenticator;
++import org.ovirt.mobile.movirt.mqtt.MqttService_;
+ import org.ovirt.mobile.movirt.provider.OVirtContract;
+-import org.ovirt.mobile.movirt.rest.OVirtClient;
++import org.ovirt.mobile.movirt.sync.OVirtClient;
+ import org.ovirt.mobile.movirt.sync.EventsHandler;
+ import org.ovirt.mobile.movirt.sync.SyncUtils;
+ 
+@@ -57,6 +59,15 @@
+     CheckBox enforceHttpBasicAuth;
+ 
+     @ViewById
++    CheckBox chkUseDoctorRest;
++
++    @ViewById
++    EditText txtDoctorRestUrl;
++
++    @ViewById
++    EditText txtDoctorMqttUrl;
++
++    @ViewById
+     ProgressBar authProgress;
+ 
+     @Bean
+@@ -78,6 +89,10 @@ void init() {
+         chkDisableHttps.setChecked(authenticator.disableHttps());
+         enforceHttpBasicAuth.setChecked(authenticator.enforceBasicAuth());
+ 
++        chkUseDoctorRest.setChecked(authenticator.useDoctorRest());
++        txtDoctorRestUrl.setText(authenticator.getDoctorRestUrl());
++        txtDoctorMqttUrl.setText(authenticator.getDoctorMqttUrl());
++        useDoctorChanged(chkUseDoctorRest.isChecked());
+     }
+ 
+     @Click(R.id.btnCreate)
+@@ -90,11 +105,16 @@ void addNew() {
+         Boolean disableHttps = chkDisableHttps.isChecked();
+         Boolean enforceHttpBasic = enforceHttpBasicAuth.isChecked();
+ 
+-        finishLogin(endpoint, username, password, adminPriv, disableHttps, enforceHttpBasic);
++        Boolean useDoctorRest = chkUseDoctorRest.isChecked();
++        String doctorRestUrl = txtDoctorRestUrl.getText().toString();
++        String doctorMqttUrl = txtDoctorMqttUrl.getText().toString();
++
++        finishLogin(endpoint, username, password, adminPriv, disableHttps, enforceHttpBasic, useDoctorRest, doctorRestUrl, doctorMqttUrl);
+     }
+ 
+     @Background
+-    void finishLogin(String apiUrl, String name, String password, Boolean hasAdminPermissions, Boolean disableHttps, Boolean enforceHttpBasic) {
++    void finishLogin(String apiUrl, String name, String password, Boolean hasAdminPermissions, Boolean disableHttps, Boolean enforceHttpBasic,
++                     Boolean useDoctorRest, String doctorRestUrl, String doctorMqttUrl) {
+         boolean endpointChanged = false;
+         if (!TextUtils.equals(apiUrl, authenticator.getApiUrl()) ||
+                 !TextUtils.equals(name, authenticator.getUserName())) {
+@@ -108,13 +128,16 @@ void finishLogin(String apiUrl, String name, String password, Boolean hasAdminPe
+         ContentResolver.setSyncAutomatically(MovirtAuthenticator.MOVIRT_ACCOUNT, OVirtContract.CONTENT_AUTHORITY, true);
+         ContentResolver.setIsSyncable(MovirtAuthenticator.MOVIRT_ACCOUNT, OVirtContract.CONTENT_AUTHORITY, 1);
+ 
+-        setUserData(MovirtAuthenticator.MOVIRT_ACCOUNT, apiUrl, name, password, hasAdminPermissions, disableHttps, enforceHttpBasic);
++        setUserData(MovirtAuthenticator.MOVIRT_ACCOUNT, apiUrl, name, password, hasAdminPermissions, disableHttps, enforceHttpBasic, useDoctorRest, doctorRestUrl, doctorMqttUrl);
+ 
+         changeProgressVisibilityTo(View.VISIBLE);
+         String token = "";
+         boolean success = true;
+         try {
+             token = client.login(apiUrl, name, password, disableHttps, hasAdminPermissions);
++            if (useDoctorRest) {
++                MqttService_.intent(getApplication()).start();
++            }
+         } catch (Exception e) {
+             showToast("Error logging in: " + e.getMessage());
+             success = false;
+@@ -151,6 +174,12 @@ void finishLogin(String apiUrl, String name, String password, Boolean hasAdminPe
+         finish();
+     }
+ 
++    @CheckedChange(R.id.chkUseDoctorRest)
++    void useDoctorChanged(boolean checked) {
++        txtDoctorRestUrl.setVisibility(checked ? View.VISIBLE : View.GONE);
++        txtDoctorMqttUrl.setVisibility(checked ? View.VISIBLE : View.GONE);
++    }
++
+     @UiThread
+     void changeProgressVisibilityTo(int visibility) {
+         authProgress.setVisibility(visibility);
+@@ -161,12 +190,17 @@ void showToast(String msg) {
+         Toast.makeText(this, msg, Toast.LENGTH_LONG).show();
+     }
+ 
+-    private void setUserData(Account account, String apiUrl, String name, String password, Boolean hasAdminPermissions, Boolean disableHttps, Boolean enforceHttpBasic) {
++    private void setUserData(Account account, String apiUrl, String name, String password,
++                             Boolean hasAdminPermissions, Boolean disableHttps, Boolean enforceHttpBasic, Boolean useDoctorRest,
++                             String doctorRestUrl, String doctorMqttUrl) {
+         accountManager.setUserData(account, MovirtAuthenticator.API_URL, apiUrl);
+         accountManager.setUserData(account, MovirtAuthenticator.USER_NAME, name);
+         accountManager.setUserData(account, MovirtAuthenticator.HAS_ADMIN_PERMISSIONS, Boolean.toString(hasAdminPermissions));
+         accountManager.setUserData(account, MovirtAuthenticator.DISABLE_HTTPS, Boolean.toString(disableHttps));
+         accountManager.setUserData(account, MovirtAuthenticator.ENFORCE_HTTP_BASIC, Boolean.toString(enforceHttpBasic));
++        accountManager.setUserData(account, MovirtAuthenticator.USE_DOCTOR_REST, Boolean.toString(useDoctorRest));
++        accountManager.setUserData(account, MovirtAuthenticator.DOCTOR_REST_URL, doctorRestUrl);
++        accountManager.setUserData(account, MovirtAuthenticator.DOCTOR_MQTT_URL, doctorMqttUrl);
+         accountManager.setPassword(account, password);
+     }
+ 
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/ui/DiskDetailFragment.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/ui/DiskDetailFragment.java
+index bc57721..94919f8 100644
+--- a/moVirt/src/main/java/org/ovirt/mobile/movirt/ui/DiskDetailFragment.java
++++ b/moVirt/src/main/java/org/ovirt/mobile/movirt/ui/DiskDetailFragment.java
+@@ -11,8 +11,8 @@
+ import org.androidannotations.annotations.UiThread;
+ import org.androidannotations.annotations.ViewById;
+ import org.ovirt.mobile.movirt.R;
+-import org.ovirt.mobile.movirt.rest.Disks;
+-import org.ovirt.mobile.movirt.rest.OVirtClient;
++import org.ovirt.mobile.movirt.sync.rest.Disks;
++import org.ovirt.mobile.movirt.sync.OVirtClient;
+ 
+ @EFragment(R.layout.fragment_disk_detail)
+ public class DiskDetailFragment extends RefreshableFragment {
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/ui/DiskListAdapter.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/ui/DiskListAdapter.java
+index 11010dd..2462fd1 100644
+--- a/moVirt/src/main/java/org/ovirt/mobile/movirt/ui/DiskListAdapter.java
++++ b/moVirt/src/main/java/org/ovirt/mobile/movirt/ui/DiskListAdapter.java
+@@ -9,8 +9,8 @@
+ import android.widget.TextView;
+ 
+ import org.ovirt.mobile.movirt.R;
+-import org.ovirt.mobile.movirt.rest.Disk;
+-import org.ovirt.mobile.movirt.rest.Disks;
++import org.ovirt.mobile.movirt.sync.rest.Disk;
++import org.ovirt.mobile.movirt.sync.rest.Disks;
+ 
+ /**
+  * Created by sphoorti on 11/2/15.
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/ui/MainActivity.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/ui/MainActivity.java
+index 0e730bb..540a9a9 100644
+--- a/moVirt/src/main/java/org/ovirt/mobile/movirt/ui/MainActivity.java
++++ b/moVirt/src/main/java/org/ovirt/mobile/movirt/ui/MainActivity.java
+@@ -50,7 +50,7 @@
+ import org.ovirt.mobile.movirt.model.trigger.Trigger;
+ import org.ovirt.mobile.movirt.provider.OVirtContract;
+ import org.ovirt.mobile.movirt.provider.ProviderFacade;
+-import org.ovirt.mobile.movirt.rest.OVirtClient;
++import org.ovirt.mobile.movirt.sync.OVirtClient;
+ import org.ovirt.mobile.movirt.sync.EventsHandler;
+ import org.ovirt.mobile.movirt.sync.SyncUtils;
+ import org.ovirt.mobile.movirt.ui.hosts.HostsFragment_;
+@@ -346,4 +346,15 @@ void noConnection(@Receiver.Extra(AccountManager.KEY_INTENT) Parcelable toOpen)
+     void connectionFailure(@Receiver.Extra(Broadcasts.Extras.CONNECTION_FAILURE_REASON) String reason) {
+         Toast.makeText(MainActivity.this, R.string.rest_req_failed + " " + reason, Toast.LENGTH_LONG).show();
+     }
++
++
++    @Receiver(actions = Broadcasts.MQTT_CONNECTED)
++    void mqttConnected() {
++        Toast.makeText(this, "Doctor REST Connected!", Toast.LENGTH_LONG).show();
++    }
++
++    @Receiver(actions = Broadcasts.MQTT_DISCONNECTED)
++    void mqttDisconnected() {
++        Toast.makeText(this, "Doctor REST Disconnected!", Toast.LENGTH_LONG).show();
++    }
+ }
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/ui/NicDetailFragment.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/ui/NicDetailFragment.java
+index cf2f6f9..b82e955 100644
+--- a/moVirt/src/main/java/org/ovirt/mobile/movirt/ui/NicDetailFragment.java
++++ b/moVirt/src/main/java/org/ovirt/mobile/movirt/ui/NicDetailFragment.java
+@@ -17,8 +17,8 @@
+ import org.androidannotations.annotations.UiThread;
+ import org.androidannotations.annotations.ViewById;
+ import org.ovirt.mobile.movirt.R;
+-import org.ovirt.mobile.movirt.rest.Nics;
+-import org.ovirt.mobile.movirt.rest.OVirtClient;
++import org.ovirt.mobile.movirt.sync.rest.Nics;
++import org.ovirt.mobile.movirt.sync.OVirtClient;
+ 
+ @EFragment(R.layout.fragment_nic_detail)
+ public class NicDetailFragment extends Fragment implements SwipeRefreshLayout.OnRefreshListener, HasProgressBar {
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/ui/NicListAdapter.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/ui/NicListAdapter.java
+index 7df821f..faa1673 100644
+--- a/moVirt/src/main/java/org/ovirt/mobile/movirt/ui/NicListAdapter.java
++++ b/moVirt/src/main/java/org/ovirt/mobile/movirt/ui/NicListAdapter.java
+@@ -10,8 +10,8 @@
+ import android.widget.TextView;
+ 
+ import org.ovirt.mobile.movirt.R;
+-import org.ovirt.mobile.movirt.rest.Nic;
+-import org.ovirt.mobile.movirt.rest.Nics;
++import org.ovirt.mobile.movirt.sync.rest.Nic;
++import org.ovirt.mobile.movirt.sync.rest.Nics;
+ 
+ /**
+  * Created by yixin on 11/2/15.
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/ui/ProgressBarResponse.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/ui/ProgressBarResponse.java
+index 17d3641..33b6a3d 100644
+--- a/moVirt/src/main/java/org/ovirt/mobile/movirt/ui/ProgressBarResponse.java
++++ b/moVirt/src/main/java/org/ovirt/mobile/movirt/ui/ProgressBarResponse.java
+@@ -1,12 +1,12 @@
+ package org.ovirt.mobile.movirt.ui;
+ 
+-import org.ovirt.mobile.movirt.rest.OVirtClient;
++import org.ovirt.mobile.movirt.sync.SimpleResponse;
+ 
+ /**
+- * Base class for OVirtClient {@link org.ovirt.mobile.movirt.rest.OVirtClient.Response}s that
++ * Base class for OVirtClient {@link org.ovirt.mobile.movirt.sync.Response}s that
+  * want to show and hide progressbar during their execution.
+  */
+-public class ProgressBarResponse<T> extends OVirtClient.SimpleResponse<T> {
++public class ProgressBarResponse<T> extends SimpleResponse<T> {
+ 
+     private final HasProgressBar hasProgressBar;
+ 
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/ui/vms/VmDetailActivity.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/ui/vms/VmDetailActivity.java
+index 494c5f5..dd1817c 100644
+--- a/moVirt/src/main/java/org/ovirt/mobile/movirt/ui/vms/VmDetailActivity.java
++++ b/moVirt/src/main/java/org/ovirt/mobile/movirt/ui/vms/VmDetailActivity.java
+@@ -25,8 +25,8 @@
+ import org.ovirt.mobile.movirt.facade.VmFacade;
+ import org.ovirt.mobile.movirt.model.Vm;
+ import org.ovirt.mobile.movirt.model.trigger.Trigger;
+-import org.ovirt.mobile.movirt.rest.ActionTicket;
+-import org.ovirt.mobile.movirt.rest.OVirtClient;
++import org.ovirt.mobile.movirt.sync.rest.ActionTicket;
++import org.ovirt.mobile.movirt.sync.OVirtClient;
+ import org.ovirt.mobile.movirt.ui.DiskDetailFragment;
+ import org.ovirt.mobile.movirt.ui.DiskDetailFragment_;
+ import org.ovirt.mobile.movirt.ui.EventsFragment;
+diff --git a/moVirt/src/main/java/org/ovirt/mobile/movirt/ui/vms/VmDetailGeneralFragment.java b/moVirt/src/main/java/org/ovirt/mobile/movirt/ui/vms/VmDetailGeneralFragment.java
+index c847438..557bce3 100644
+--- a/moVirt/src/main/java/org/ovirt/mobile/movirt/ui/vms/VmDetailGeneralFragment.java
++++ b/moVirt/src/main/java/org/ovirt/mobile/movirt/ui/vms/VmDetailGeneralFragment.java
+@@ -20,7 +20,7 @@
+ import org.ovirt.mobile.movirt.facade.VmFacade;
+ import org.ovirt.mobile.movirt.model.Vm;
+ import org.ovirt.mobile.movirt.provider.ProviderFacade;
+-import org.ovirt.mobile.movirt.rest.OVirtClient;
++import org.ovirt.mobile.movirt.sync.OVirtClient;
+ import org.ovirt.mobile.movirt.ui.ProgressBarResponse;
+ import org.ovirt.mobile.movirt.ui.RefreshableFragment;
+ 
+diff --git a/moVirt/src/main/res/layout/authenticator_activity.xml b/moVirt/src/main/res/layout/authenticator_activity.xml
+index 001f390..2bc532b 100644
+--- a/moVirt/src/main/res/layout/authenticator_activity.xml
++++ b/moVirt/src/main/res/layout/authenticator_activity.xml
+@@ -1,6 +1,7 @@
+ <?xml version="1.0" encoding="utf-8"?>
+ <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+-    android:orientation="vertical" android:layout_width="match_parent"
++    android:orientation="vertical"
++    android:layout_width="match_parent"
+     android:layout_height="match_parent">
+ 
+     <EditText
+@@ -8,6 +9,7 @@
+         android:layout_width="match_parent"
+         android:layout_height="wrap_content"
+         android:hint="@string/account_endpoint"
++        android:inputType="textUri"
+         />
+ 
+     <EditText
+@@ -46,6 +48,27 @@
+         android:text="@string/account_enforceHttpBasicAuth"
+         />
+ 
++    <CheckBox
++        android:id="@+id/chkUseDoctorRest"
++        android:layout_width="match_parent"
++        android:layout_height="wrap_content"
++        android:text="@string/account_useDoctorRest"
++        />
++
++    <EditText
++        android:id="@+id/txtDoctorRestUrl"
++        android:layout_width="match_parent"
++        android:layout_height="wrap_content"
++        android:hint="@string/account_doctorRestUrl"
++        android:inputType="textUri" />
++
++    <EditText
++        android:id="@+id/txtDoctorMqttUrl"
++        android:layout_width="match_parent"
++        android:layout_height="wrap_content"
++        android:hint="@string/account_doctorMqttUrl"
++        android:inputType="textUri" />
++
+     <ProgressBar
+         android:id="@+id/authProgress"
+         style="@style/vmsProgress"
+diff --git a/moVirt/src/main/res/values/strings.xml b/moVirt/src/main/res/values/strings.xml
+index a2ef511..07cfb96 100644
+--- a/moVirt/src/main/res/values/strings.xml
++++ b/moVirt/src/main/res/values/strings.xml
+@@ -108,6 +108,9 @@
+     <string name="account_disableHttpsChecking">Disable Https certificate checking</string>
+     <string name="account_enforceHttpBasicAuth">Enforce HTTP Basic Authentication</string>
+     <string name="account_disableHttpsChecking_summary">This method is dangerous and should not be used in production setup.</string>
++    <string name="account_useDoctorRest">Use Doctor Rest Proxy</string>
++    <string name="account_doctorRestUrl">Doctor Rest URL</string>
++    <string name="account_doctorMqttUrl">Doctor MQTT broker URL</string>
+     <string name="name">Name</string>
+ 
+     <string name="nic_para">Linked : %1$b&#160;&#160;&#160;&#160;plugged : %2$b</string>

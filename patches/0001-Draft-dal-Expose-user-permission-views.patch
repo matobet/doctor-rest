@@ -1,0 +1,146 @@
+From de4e71ac22758ea88b9648b892231732f7fd114f Mon Sep 17 00:00:00 2001
+From: Martin Betak <mbetak@redhat.com>
+Date: Thu, 3 Sep 2015 22:22:37 +0200
+Subject: [PATCH 1/2] [Draft] dal: Expose user permission views
+
+Enable direct access to entity <-> logged in user
+permission mapping.
+
+This will enable us to generate Doctor REST's per-entity
+Access Control Lists.
+
+Wiki: http://www.ovirt.org/Features/Doctor_REST
+Change-Id: Idf05211444ed2bcf8e8ec641e32d851b1dbac52c
+Signed-off-by: Martin Betak <mbetak@redhat.com>
+---
+ .../businessentities/UserPermissionView.java       | 30 +++++++++++++++++
+ .../engine/core/dao/UserPermissionViewDao.java     | 18 ++++++++++
+ .../engine/core/dao/UserPermissionViewDaoImpl.java | 38 ++++++++++++++++++++++
+ .../dbscripts/multi_level_administration_sp.sql    |  7 ++++
+ 4 files changed, 93 insertions(+)
+ create mode 100644 backend/manager/modules/common/src/main/java/org/ovirt/engine/core/common/businessentities/UserPermissionView.java
+ create mode 100644 backend/manager/modules/dal/src/main/java/org/ovirt/engine/core/dao/UserPermissionViewDao.java
+ create mode 100644 backend/manager/modules/dal/src/main/java/org/ovirt/engine/core/dao/UserPermissionViewDaoImpl.java
+
+diff --git a/backend/manager/modules/common/src/main/java/org/ovirt/engine/core/common/businessentities/UserPermissionView.java b/backend/manager/modules/common/src/main/java/org/ovirt/engine/core/common/businessentities/UserPermissionView.java
+new file mode 100644
+index 0000000..ccf2cd8
+--- /dev/null
++++ b/backend/manager/modules/common/src/main/java/org/ovirt/engine/core/common/businessentities/UserPermissionView.java
+@@ -0,0 +1,30 @@
++package org.ovirt.engine.core.common.businessentities;
++
++import org.ovirt.engine.core.compat.Guid;
++
++/**
++ * A pair or (entity_id, user_id) represents that currently logged-in user
++ * with 'user_id' has permission to access entity (of some given type) with 'entity_id'.
++ */
++public class UserPermissionView {
++
++    private Guid entityId;
++
++    private Guid userId;
++
++    public Guid getEntityId() {
++        return entityId;
++    }
++
++    public void setEntityId(Guid entityId) {
++        this.entityId = entityId;
++    }
++
++    public Guid getUserId() {
++        return userId;
++    }
++
++    public void setUserId(Guid userId) {
++        this.userId = userId;
++    }
++}
+diff --git a/backend/manager/modules/dal/src/main/java/org/ovirt/engine/core/dao/UserPermissionViewDao.java b/backend/manager/modules/dal/src/main/java/org/ovirt/engine/core/dao/UserPermissionViewDao.java
+new file mode 100644
+index 0000000..22878f0
+--- /dev/null
++++ b/backend/manager/modules/dal/src/main/java/org/ovirt/engine/core/dao/UserPermissionViewDao.java
+@@ -0,0 +1,18 @@
++package org.ovirt.engine.core.dao;
++
++import java.util.List;
++
++import org.ovirt.engine.core.common.businessentities.UserPermissionView;
++
++/**
++ * Enables direct access to flattened permissions of logged-in users to access entities of given type.
++ */
++public interface UserPermissionViewDao extends Dao {
++
++    /**
++     * Returns list of {@link UserPermissionView} pairs for given <code>entityType</code>.
++     *
++     * @param entityType Type of entity which permissions we are interested in. E.g. 'vm_template' or 'storage_pool'.
++     */
++    List<UserPermissionView> getAllUserPermissions(String entityType);
++}
+diff --git a/backend/manager/modules/dal/src/main/java/org/ovirt/engine/core/dao/UserPermissionViewDaoImpl.java b/backend/manager/modules/dal/src/main/java/org/ovirt/engine/core/dao/UserPermissionViewDaoImpl.java
+new file mode 100644
+index 0000000..f0cecd9
+--- /dev/null
++++ b/backend/manager/modules/dal/src/main/java/org/ovirt/engine/core/dao/UserPermissionViewDaoImpl.java
+@@ -0,0 +1,38 @@
++package org.ovirt.engine.core.dao;
++
++import java.sql.ResultSet;
++import java.sql.SQLException;
++import java.util.List;
++
++import javax.inject.Named;
++import javax.inject.Singleton;
++
++import org.ovirt.engine.core.common.businessentities.UserPermissionView;
++import org.springframework.jdbc.core.RowMapper;
++
++@Named
++@Singleton
++public class UserPermissionViewDaoImpl extends BaseDao implements UserPermissionViewDao {
++
++    @Override
++    public List<UserPermissionView> getAllUserPermissions(String entityType) {
++        return getCallsHandler().executeReadList("GetAllUserPermissions",
++                UserPermissionViewRowMapper.instance,
++                getCustomMapSqlParameterSource().addValue("entity_type", entityType));
++    }
++
++    private static class UserPermissionViewRowMapper implements RowMapper<UserPermissionView> {
++
++        public static final UserPermissionViewRowMapper instance = new UserPermissionViewRowMapper();
++
++        @Override
++        public UserPermissionView mapRow(ResultSet rs, int rowNum) throws SQLException {
++
++            UserPermissionView view = new UserPermissionView();
++            view.setEntityId(getGuid(rs, "entity_id"));
++            view.setUserId(getGuid(rs, "user_id"));
++
++            return view;
++        }
++    }
++}
+diff --git a/packaging/dbscripts/multi_level_administration_sp.sql b/packaging/dbscripts/multi_level_administration_sp.sql
+index aff320e..f374668 100644
+--- a/packaging/dbscripts/multi_level_administration_sp.sql
++++ b/packaging/dbscripts/multi_level_administration_sp.sql
+@@ -747,3 +747,10 @@ BEGIN
+ END; $procedure$
+ LANGUAGE plpgsql;
+ 
++CREATE OR REPLACE FUNCTION GetAllUserPermissions(v_entity_type VARCHAR(255))
++RETURNS SETOF user_disk_permissions_view STABLE -- or any other user_*_permissions_view (entity_id, user_id)
++   AS $procedure$
++BEGIN
++  RETURN QUERY EXECUTE FORMAT('SELECT * FROM user_%s_permissions_view', v_entity_type);
++END; $procedure$
++LANGUAGE plpgsql;
+-- 
+2.5.5
+

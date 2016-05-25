@@ -1,0 +1,803 @@
+From e100561c2044930ae553cc7421d63d9efa6f0132 Mon Sep 17 00:00:00 2001
+From: Martin Betak <mbetak@redhat.com>
+Date: Sun, 23 Aug 2015 14:37:43 +0200
+Subject: [PATCH 2/2] [Draft] Add Doctor Rest integraton
+
+Introduced new component: DoctorCacheManager
+whose sole responsibility is to keep all configured
+Doctor caches up to date.
+
+Initial implementation relies on periodic (configurable interval) DB queries
+and bulk updates of those into Doctor Rest.
+
+On top of this entities, individual permissions (represented by Doctor's ACLs)
+are queried from appropriate entity specific user_*_permission_view which joins
+logged-in user-ids with entity ids that the user can see.
+
+Individual business entities are mapped to Doctor 'documents' that are
+serialized into JSON in such a way to conform to Doctor's format.
+Those 'document' entities should contain data optimized for direct consumption
+by the frontend - essentialy implementing the DTO pattern.
+
+Communication with the Doctor service is encapsulated in the DoctorClient class,
+and it also contains support for multiple concurrently running Doctor services
+by multiplexing management commands to all of them. This enables the user to run
+multiple (potentially) geographically optimized frontend proxies to further reduce
+perceived latency.
+
+In case user doesn't want to use Doctor REST at all, this whole integration can
+be disabled by engine config.
+
+Wiki: http://www.ovirt.org/Features/Doctor_REST
+Change-Id: I546f4602bf1d071ac1f3f27107e1aa8466419ee8
+Signed-off-by: Martin Betak <mbetak@redhat.com>
+---
+ .../core/bll/InitBackendServicesOnStartupBean.java |   2 +
+ .../engine/core/bll/doctor/DoctorCacheManager.java | 106 +++++++++++++++++++
+ .../ovirt/engine/core/bll/doctor/DoctorClient.java | 114 +++++++++++++++++++++
+ .../engine/core/bll/doctor/PermissionResolver.java |  59 +++++++++++
+ .../core/bll/doctor/documents/BaseDocument.java    |  40 ++++++++
+ .../engine/core/bll/doctor/documents/Cluster.java  |  26 +++++
+ .../core/bll/doctor/documents/DataCenter.java      |   7 ++
+ .../core/bll/doctor/documents/DocumentFor.java     |  18 ++++
+ .../core/bll/doctor/documents/DocumentUtils.java   |  24 +++++
+ .../engine/core/bll/doctor/documents/Host.java     |  26 +++++
+ .../core/bll/doctor/documents/NamedDocument.java   |  24 +++++
+ .../doctor/documents/NamedDocumentWithStatus.java  |  24 +++++
+ .../core/bll/doctor/documents/PermissionName.java  |  21 ++++
+ .../ovirt/engine/core/bll/doctor/documents/Vm.java |  87 ++++++++++++++++
+ .../engine/core/common/config/ConfigValues.java    |  16 +++
+ .../dbscripts/upgrade/pre_upgrade/0000_config.sql  |   7 ++
+ .../etc/engine-config/engine-config.properties     |   8 ++
+ 17 files changed, 609 insertions(+)
+ create mode 100644 backend/manager/modules/bll/src/main/java/org/ovirt/engine/core/bll/doctor/DoctorCacheManager.java
+ create mode 100644 backend/manager/modules/bll/src/main/java/org/ovirt/engine/core/bll/doctor/DoctorClient.java
+ create mode 100644 backend/manager/modules/bll/src/main/java/org/ovirt/engine/core/bll/doctor/PermissionResolver.java
+ create mode 100644 backend/manager/modules/bll/src/main/java/org/ovirt/engine/core/bll/doctor/documents/BaseDocument.java
+ create mode 100644 backend/manager/modules/bll/src/main/java/org/ovirt/engine/core/bll/doctor/documents/Cluster.java
+ create mode 100644 backend/manager/modules/bll/src/main/java/org/ovirt/engine/core/bll/doctor/documents/DataCenter.java
+ create mode 100644 backend/manager/modules/bll/src/main/java/org/ovirt/engine/core/bll/doctor/documents/DocumentFor.java
+ create mode 100644 backend/manager/modules/bll/src/main/java/org/ovirt/engine/core/bll/doctor/documents/DocumentUtils.java
+ create mode 100644 backend/manager/modules/bll/src/main/java/org/ovirt/engine/core/bll/doctor/documents/Host.java
+ create mode 100644 backend/manager/modules/bll/src/main/java/org/ovirt/engine/core/bll/doctor/documents/NamedDocument.java
+ create mode 100644 backend/manager/modules/bll/src/main/java/org/ovirt/engine/core/bll/doctor/documents/NamedDocumentWithStatus.java
+ create mode 100644 backend/manager/modules/bll/src/main/java/org/ovirt/engine/core/bll/doctor/documents/PermissionName.java
+ create mode 100644 backend/manager/modules/bll/src/main/java/org/ovirt/engine/core/bll/doctor/documents/Vm.java
+
+diff --git a/backend/manager/modules/bll/src/main/java/org/ovirt/engine/core/bll/InitBackendServicesOnStartupBean.java b/backend/manager/modules/bll/src/main/java/org/ovirt/engine/core/bll/InitBackendServicesOnStartupBean.java
+index 159dd3f..ed761ae 100644
+--- a/backend/manager/modules/bll/src/main/java/org/ovirt/engine/core/bll/InitBackendServicesOnStartupBean.java
++++ b/backend/manager/modules/bll/src/main/java/org/ovirt/engine/core/bll/InitBackendServicesOnStartupBean.java
+@@ -8,6 +8,7 @@ import javax.enterprise.inject.Instance;
+ import javax.inject.Inject;
+ 
+ import org.ovirt.engine.core.bll.aaa.SessionDataContainer;
++import org.ovirt.engine.core.bll.doctor.DoctorCacheManager;
+ import org.ovirt.engine.core.bll.dwh.DwhHeartBeat;
+ import org.ovirt.engine.core.bll.gluster.GlusterJobsManager;
+ import org.ovirt.engine.core.bll.hostdev.HostDeviceManager;
+@@ -94,6 +95,7 @@ public class InitBackendServicesOnStartupBean implements InitBackendServicesOnSt
+             }
+ 
+             loadService(CertificationValidityChecker.class);
++            loadService(DoctorCacheManager.class);
+         } catch (Exception ex) {
+             log.error("Failed to initialize backend", ex);
+             throw ex;
+diff --git a/backend/manager/modules/bll/src/main/java/org/ovirt/engine/core/bll/doctor/DoctorCacheManager.java b/backend/manager/modules/bll/src/main/java/org/ovirt/engine/core/bll/doctor/DoctorCacheManager.java
+new file mode 100644
+index 0000000..f74e021
+--- /dev/null
++++ b/backend/manager/modules/bll/src/main/java/org/ovirt/engine/core/bll/doctor/DoctorCacheManager.java
+@@ -0,0 +1,106 @@
++package org.ovirt.engine.core.bll.doctor;
++
++import java.util.ArrayList;
++import java.util.List;
++import java.util.Map;
++import java.util.concurrent.TimeUnit;
++
++import javax.annotation.PostConstruct;
++import javax.inject.Inject;
++import javax.inject.Singleton;
++
++import org.ovirt.engine.core.bll.doctor.documents.Cluster;
++import org.ovirt.engine.core.bll.doctor.documents.DataCenter;
++import org.ovirt.engine.core.bll.doctor.documents.DocumentFor;
++import org.ovirt.engine.core.bll.doctor.documents.DocumentUtils;
++import org.ovirt.engine.core.bll.doctor.documents.Host;
++import org.ovirt.engine.core.bll.doctor.documents.Vm;
++import org.ovirt.engine.core.common.BackendService;
++import org.ovirt.engine.core.common.businessentities.BusinessEntity;
++import org.ovirt.engine.core.common.config.Config;
++import org.ovirt.engine.core.common.config.ConfigValues;
++import org.ovirt.engine.core.compat.Guid;
++import org.ovirt.engine.core.dao.StoragePoolDao;
++import org.ovirt.engine.core.dao.VdsDao;
++import org.ovirt.engine.core.dao.VdsGroupDao;
++import org.ovirt.engine.core.dao.VmDao;
++import org.ovirt.engine.core.utils.timer.OnTimerMethodAnnotation;
++import org.ovirt.engine.core.utils.timer.SchedulerUtilQuartzImpl;
++import org.slf4j.Logger;
++import org.slf4j.LoggerFactory;
++
++/**
++ * Keeps configured Doctor REST caches up to date.
++ */
++@Singleton
++public class DoctorCacheManager implements BackendService {
++
++    private static final Logger log = LoggerFactory.getLogger(DoctorCacheManager.class);
++
++    @Inject
++    private SchedulerUtilQuartzImpl schedulerUtil;
++
++    @Inject
++    private VmDao vmDao;
++
++    @Inject
++    private VdsDao vdsDao;
++
++    @Inject
++    private VdsGroupDao vdsGroupDao;
++
++    @Inject
++    private StoragePoolDao storagePoolDao;
++
++    @Inject
++    private DoctorClient doctorClient;
++
++    @Inject
++    private PermissionResolver permissionResolver;
++
++    @PostConstruct
++    private void init() {
++        if (Config.getValue(ConfigValues.DoctorRestEnabled)) {
++            int interval = Config.getValue(ConfigValues.DoctorRestFullUpdateInterval);
++            schedulerUtil.scheduleAFixedDelayJob(this, "doFullSync", new Class<?>[]{}, new Object[]{},
++                    0, interval, TimeUnit.SECONDS);
++        }
++    }
++
++    @OnTimerMethodAnnotation("doFullSync")
++    public void doFullSync() {
++        log.debug("Performing full sync to Doctor REST");
++
++        try {
++            updateEntities(DataCenter.class, storagePoolDao.getAll());
++            updateEntities(Cluster.class, vdsGroupDao.getAll());
++            updateEntities(Host.class, vdsDao.getAll());
++            updateEntities(Vm.class, vmDao.getAll());
++        } catch (Exception e) {
++            log.error(e.getMessage(), e);
++        }
++    }
++
++    private <D extends DocumentFor<T>, T extends BusinessEntity<Guid>> void updateEntities(Class<D> clazz, List<T> entities) throws Exception {
++        ArrayList<D> documents = new ArrayList<>();
++        Map<Guid, List<Guid>> permissions = permissionResolver.getPermissions(clazz);
++        for (T entity : entities) {
++            D document = clazz.newInstance();
++            document.loadFrom(entity);
++            document.setAcl(new ArrayList<String>());
++            List<Guid> acl = permissions.get(entity.getId());
++            if (acl != null) {
++                for (Guid id : acl) {
++                    document.getAcl().add(id.toString());
++                }
++            }
++            documents.add(document);
++        }
++        doctorClient.updateEntities(getCollectionName(clazz), documents);
++    }
++
++    /** Converts document class names (such as 'DataCenter') to Doctor entity collection names 'data_center'. */
++    private static <D extends DocumentFor<?>> String getCollectionName(Class<D> clazz) {
++        return DocumentUtils.camelToUnderscores(clazz.getSimpleName());
++    }
++}
+diff --git a/backend/manager/modules/bll/src/main/java/org/ovirt/engine/core/bll/doctor/DoctorClient.java b/backend/manager/modules/bll/src/main/java/org/ovirt/engine/core/bll/doctor/DoctorClient.java
+new file mode 100644
+index 0000000..a302cf2
+--- /dev/null
++++ b/backend/manager/modules/bll/src/main/java/org/ovirt/engine/core/bll/doctor/DoctorClient.java
+@@ -0,0 +1,114 @@
++package org.ovirt.engine.core.bll.doctor;
++
++import java.io.IOException;
++import java.io.UnsupportedEncodingException;
++import java.util.ArrayList;
++import java.util.List;
++import java.util.Objects;
++
++import javax.annotation.PostConstruct;
++import javax.inject.Singleton;
++
++import org.apache.commons.httpclient.HostConfiguration;
++import org.apache.commons.httpclient.HttpClient;
++import org.apache.commons.httpclient.methods.PutMethod;
++import org.apache.commons.httpclient.methods.StringRequestEntity;
++import org.apache.commons.lang.StringUtils;
++import org.ovirt.engine.core.common.config.Config;
++import org.ovirt.engine.core.common.config.ConfigValues;
++import org.ovirt.engine.core.utils.SerializationFactory;
++import org.ovirt.engine.core.utils.serialization.json.JsonObjectSerializer;
++import org.slf4j.Logger;
++import org.slf4j.LoggerFactory;
++
++/**
++ * Manages {@link HttpClient} connections to one or more configured Doctor REST services and multiplexes
++ * update operations to each respective service.
++ */
++@Singleton
++public class DoctorClient {
++
++    private static final Logger log = LoggerFactory.getLogger(DoctorClient.class);
++
++    public static final String CONTENT_TYPE = "application/json";
++    public static final String ENTITY_COLLECTION_PREFIX = "/entities/";
++    public static final String SECRET_HEADER_NAME = "secret";
++
++    private final List<HttpClient> httpClients = new ArrayList<>();
++    private final String secret = Config.getValue(ConfigValues.DoctorRestSecret);
++
++    private final JsonObjectSerializer serializer = SerializationFactory.getSerializer();
++
++    @PostConstruct
++    public void init() {
++        if (!Config.<Boolean>getValue(ConfigValues.DoctorRestEnabled)) {
++            return;
++        }
++
++        List<String> endpoints = Config.getValue(ConfigValues.DoctorRestHosts);
++        for (String endpoint : endpoints) {
++            String[] hostAndPort = endpoint.split(":");
++            String host = hostAndPort[0];
++            int port = Integer.parseInt(hostAndPort[1]);
++            log.info("Connecting to Doctor REST at {}:{} ...", host, port);
++
++            HostConfiguration hostConfiguration = new HostConfiguration();
++            hostConfiguration.setHost(host, port);
++
++            // TODO: utilize SSL when communicating with Doctor Rest
++            HttpClient httpClient = new HttpClient();
++            httpClient.setHostConfiguration(hostConfiguration);
++
++            httpClients.add(httpClient);
++        }
++    }
++
++    /**
++     * Performs full update of entities of given type (i.e. replaces existing collection with new collection).
++     * @param name
++     *      Doctor REST name for given entity type, e.g. 'vm', 'cluster', or 'data_center'.
++     * @param entities
++     *      List of mapped doctor documents {@see BaseDocument} to be serialized to JSON and uploaded.
++     * @param <T>
++     *      Type of document entities.
++     */
++    public <T> void updateEntities(String name, ArrayList<T> entities) {
++        Objects.requireNonNull(name, "'name' of entity collection cannot be null!");
++
++        PutMethod putMethod = getPutMethod(name, entities);
++
++        // TODO: make updates to multiple Doctors run concurrently
++        for (HttpClient httpClient : httpClients) {
++            try {
++                log.debug("Performing update of '{}' entities for Doctor REST at {}:{}",
++                        httpClient.getHostConfiguration().getHost(),
++                        httpClient.getHostConfiguration().getPort());
++
++                int responseCode = httpClient.executeMethod(putMethod);
++                if (responseCode != 200) {
++                    throw new IOException("Doctor's HTTP response code was: " + responseCode);
++                }
++            } catch (IOException e) {
++                log.error("Error updating entities for Doctor REST at {}:{}: {}",
++                        httpClient.getHostConfiguration().getHost(),
++                        httpClient.getHostConfiguration().getPort(),
++                        e.getMessage(), e);
++            }
++        }
++    }
++
++    private <T> PutMethod getPutMethod(String name, ArrayList<T> entities) {
++        PutMethod putMethod = new PutMethod(ENTITY_COLLECTION_PREFIX + name);
++        if (StringUtils.isNotEmpty(secret)) {
++            putMethod.setRequestHeader(SECRET_HEADER_NAME, secret);
++        }
++        String content = serializer.serializeUnformattedJson(entities);
++        try {
++            putMethod.setRequestEntity(new StringRequestEntity(content, CONTENT_TYPE, null));
++        } catch (UnsupportedEncodingException e) {
++            // cannot happen as we are using the default encoding
++            log.error(e.getMessage(), e);
++        }
++        return putMethod;
++    }
++}
+diff --git a/backend/manager/modules/bll/src/main/java/org/ovirt/engine/core/bll/doctor/PermissionResolver.java b/backend/manager/modules/bll/src/main/java/org/ovirt/engine/core/bll/doctor/PermissionResolver.java
+new file mode 100644
+index 0000000..18ec423
+--- /dev/null
++++ b/backend/manager/modules/bll/src/main/java/org/ovirt/engine/core/bll/doctor/PermissionResolver.java
+@@ -0,0 +1,59 @@
++package org.ovirt.engine.core.bll.doctor;
++
++import static org.ovirt.engine.core.utils.collections.MultiValueMapUtils.addToMap;
++
++import java.util.HashMap;
++import java.util.List;
++import java.util.Map;
++
++import javax.inject.Inject;
++import javax.inject.Singleton;
++
++import org.apache.commons.lang.StringUtils;
++import org.ovirt.engine.core.bll.doctor.documents.DocumentFor;
++import org.ovirt.engine.core.bll.doctor.documents.DocumentUtils;
++import org.ovirt.engine.core.bll.doctor.documents.PermissionName;
++import org.ovirt.engine.core.common.businessentities.UserPermissionView;
++import org.ovirt.engine.core.compat.Guid;
++import org.ovirt.engine.core.dao.UserPermissionViewDao;
++
++
++@Singleton
++public class PermissionResolver {
++
++    @Inject
++    private UserPermissionViewDao userPermissionViewDao;
++
++    private Map<Class<? extends DocumentFor<?>>, String> permissionNames = new HashMap<>();
++
++    /**
++     * Provides access to map of Entity IDs to list of User IDs in a format directly usable for
++     * construction of Doctors' entity ACLs, i.e. entity_id -> [user_id_1, user_id_2, ..]
++     *
++     * @param clazz Class of the Doctor document, whose permission we want to resolve.
++     */
++    public <D extends DocumentFor<?>> Map<Guid, List<Guid>> getPermissions(Class<D> clazz) {
++        String entityPermissionName = getPermissionName(clazz);
++        List<UserPermissionView> permissions = userPermissionViewDao.getAllUserPermissions(entityPermissionName);
++
++        Map<Guid, List<Guid>> result = new HashMap<>();
++        for (UserPermissionView permission : permissions) {
++            addToMap(permission.getEntityId(), permission.getUserId(), result);
++        }
++
++        return result;
++    }
++
++    private <D extends DocumentFor<?>> String getPermissionName(Class<D> clazz) {
++        if (!permissionNames.containsKey(clazz)) {
++            PermissionName annotation = clazz.getAnnotation(PermissionName.class);
++            String permissionName = (annotation != null && StringUtils.isNotEmpty(annotation.value()))
++                    ? annotation.value()
++                    : DocumentUtils.camelToUnderscores(clazz.getSimpleName());
++
++            permissionNames.put(clazz, permissionName);
++        }
++
++        return permissionNames.get(clazz);
++    }
++}
+diff --git a/backend/manager/modules/bll/src/main/java/org/ovirt/engine/core/bll/doctor/documents/BaseDocument.java b/backend/manager/modules/bll/src/main/java/org/ovirt/engine/core/bll/doctor/documents/BaseDocument.java
+new file mode 100644
+index 0000000..e731a11
+--- /dev/null
++++ b/backend/manager/modules/bll/src/main/java/org/ovirt/engine/core/bll/doctor/documents/BaseDocument.java
+@@ -0,0 +1,40 @@
++package org.ovirt.engine.core.bll.doctor.documents;
++
++import java.util.List;
++
++import org.codehaus.jackson.annotate.JsonProperty;
++import org.codehaus.jackson.map.annotate.JsonSerialize;
++import org.ovirt.engine.core.common.businessentities.BusinessEntity;
++
++@JsonSerialize(include = JsonSerialize.Inclusion.NON_NULL)
++public abstract class BaseDocument<T extends BusinessEntity<?>> implements DocumentFor<T> {
++
++    private String id;
++
++    @JsonProperty("_acl")
++    private List<String> acl;
++
++    @Override
++    public String getId() {
++        return id;
++    }
++
++    @Override
++    public void setId(String id) {
++        this.id = id;
++    }
++
++    @Override
++    public List<String> getAcl() {
++        return acl;
++    }
++
++    @Override
++    public void setAcl(List<String> acl) {
++        this.acl = acl;
++    }
++
++    public void loadFrom(T entity) {
++        setId(entity.getId().toString());
++    }
++}
+diff --git a/backend/manager/modules/bll/src/main/java/org/ovirt/engine/core/bll/doctor/documents/Cluster.java b/backend/manager/modules/bll/src/main/java/org/ovirt/engine/core/bll/doctor/documents/Cluster.java
+new file mode 100644
+index 0000000..81ea176
+--- /dev/null
++++ b/backend/manager/modules/bll/src/main/java/org/ovirt/engine/core/bll/doctor/documents/Cluster.java
+@@ -0,0 +1,26 @@
++package org.ovirt.engine.core.bll.doctor.documents;
++
++import org.codehaus.jackson.annotate.JsonProperty;
++import org.ovirt.engine.core.common.businessentities.VDSGroup;
++
++@PermissionName("vds_groups")
++public class Cluster extends NamedDocument<VDSGroup> {
++
++    @JsonProperty("data_center")
++    private String dataCenterId;
++
++    public String getDataCenterId() {
++        return dataCenterId;
++    }
++
++    public void setDataCenterId(String dataCenterId) {
++        this.dataCenterId = dataCenterId;
++    }
++
++    @Override
++    public void loadFrom(VDSGroup entity) {
++        super.loadFrom(entity);
++
++        setDataCenterId(entity.getStoragePoolId().toString());
++    }
++}
+diff --git a/backend/manager/modules/bll/src/main/java/org/ovirt/engine/core/bll/doctor/documents/DataCenter.java b/backend/manager/modules/bll/src/main/java/org/ovirt/engine/core/bll/doctor/documents/DataCenter.java
+new file mode 100644
+index 0000000..ad80b60
+--- /dev/null
++++ b/backend/manager/modules/bll/src/main/java/org/ovirt/engine/core/bll/doctor/documents/DataCenter.java
+@@ -0,0 +1,7 @@
++package org.ovirt.engine.core.bll.doctor.documents;
++
++import org.ovirt.engine.core.common.businessentities.StoragePool;
++
++@PermissionName("storage_pool")
++public class DataCenter extends NamedDocumentWithStatus<StoragePool> {
++}
+diff --git a/backend/manager/modules/bll/src/main/java/org/ovirt/engine/core/bll/doctor/documents/DocumentFor.java b/backend/manager/modules/bll/src/main/java/org/ovirt/engine/core/bll/doctor/documents/DocumentFor.java
+new file mode 100644
+index 0000000..d5fd009
+--- /dev/null
++++ b/backend/manager/modules/bll/src/main/java/org/ovirt/engine/core/bll/doctor/documents/DocumentFor.java
+@@ -0,0 +1,18 @@
++package org.ovirt.engine.core.bll.doctor.documents;
++
++import java.util.List;
++
++import org.ovirt.engine.core.common.businessentities.BusinessEntity;
++
++public interface DocumentFor<T extends BusinessEntity<?>> {
++
++    void setId(String id);
++
++    String getId();
++
++    void setAcl(List<String> acl);
++
++    List<String> getAcl();
++
++    void loadFrom(T entity);
++}
+diff --git a/backend/manager/modules/bll/src/main/java/org/ovirt/engine/core/bll/doctor/documents/DocumentUtils.java b/backend/manager/modules/bll/src/main/java/org/ovirt/engine/core/bll/doctor/documents/DocumentUtils.java
+new file mode 100644
+index 0000000..3c7f0e8
+--- /dev/null
++++ b/backend/manager/modules/bll/src/main/java/org/ovirt/engine/core/bll/doctor/documents/DocumentUtils.java
+@@ -0,0 +1,24 @@
++package org.ovirt.engine.core.bll.doctor.documents;
++
++public final class DocumentUtils {
++
++    public static int nullSafe(Integer nullable) {
++        return nullable == null ? 0 : nullable;
++    }
++
++    public static String camelToUnderscores(String camelString) {
++        StringBuilder builder = new StringBuilder();
++        builder.append(Character.toLowerCase(camelString.charAt(0)));
++
++        for (int i = 1; i < camelString.length(); i++) {
++            char ch = camelString.charAt(i);
++            if (Character.isUpperCase(ch)) {
++                builder.append('_').append(Character.toLowerCase(ch));
++            } else {
++                builder.append(ch);
++            }
++        }
++
++        return builder.toString();
++    }
++}
+diff --git a/backend/manager/modules/bll/src/main/java/org/ovirt/engine/core/bll/doctor/documents/Host.java b/backend/manager/modules/bll/src/main/java/org/ovirt/engine/core/bll/doctor/documents/Host.java
+new file mode 100644
+index 0000000..82fb19c
+--- /dev/null
++++ b/backend/manager/modules/bll/src/main/java/org/ovirt/engine/core/bll/doctor/documents/Host.java
+@@ -0,0 +1,26 @@
++package org.ovirt.engine.core.bll.doctor.documents;
++
++import org.codehaus.jackson.annotate.JsonProperty;
++import org.ovirt.engine.core.common.businessentities.VDS;
++
++@PermissionName("vds")
++public class Host extends NamedDocumentWithStatus<VDS> {
++
++    @JsonProperty("cluster")
++    private String clusterId;
++
++    public String getClusterId() {
++        return clusterId;
++    }
++
++    public void setClusterId(String clusterId) {
++        this.clusterId = clusterId;
++    }
++
++    @Override
++    public void loadFrom(VDS entity) {
++        super.loadFrom(entity);
++
++        setClusterId(entity.getVdsGroupId().toString());
++    }
++}
+diff --git a/backend/manager/modules/bll/src/main/java/org/ovirt/engine/core/bll/doctor/documents/NamedDocument.java b/backend/manager/modules/bll/src/main/java/org/ovirt/engine/core/bll/doctor/documents/NamedDocument.java
+new file mode 100644
+index 0000000..33211d9
+--- /dev/null
++++ b/backend/manager/modules/bll/src/main/java/org/ovirt/engine/core/bll/doctor/documents/NamedDocument.java
+@@ -0,0 +1,24 @@
++package org.ovirt.engine.core.bll.doctor.documents;
++
++import org.ovirt.engine.core.common.businessentities.BusinessEntity;
++import org.ovirt.engine.core.common.businessentities.Nameable;
++
++public abstract class NamedDocument<T extends BusinessEntity<?> & Nameable> extends BaseDocument<T> {
++
++    private String name;
++
++    public String getName() {
++        return name;
++    }
++
++    public void setName(String name) {
++        this.name = name;
++    }
++
++    @Override
++    public void loadFrom(T entity) {
++        super.loadFrom(entity);
++
++        setName(entity.getName());
++    }
++}
+diff --git a/backend/manager/modules/bll/src/main/java/org/ovirt/engine/core/bll/doctor/documents/NamedDocumentWithStatus.java b/backend/manager/modules/bll/src/main/java/org/ovirt/engine/core/bll/doctor/documents/NamedDocumentWithStatus.java
+new file mode 100644
+index 0000000..a371eaf
+--- /dev/null
++++ b/backend/manager/modules/bll/src/main/java/org/ovirt/engine/core/bll/doctor/documents/NamedDocumentWithStatus.java
+@@ -0,0 +1,24 @@
++package org.ovirt.engine.core.bll.doctor.documents;
++
++import org.ovirt.engine.core.common.businessentities.BusinessEntityWithStatus;
++import org.ovirt.engine.core.common.businessentities.Nameable;
++
++public abstract class NamedDocumentWithStatus<T extends BusinessEntityWithStatus<?, ?> & Nameable> extends NamedDocument<T> {
++
++    private String status;
++
++    public String getStatus() {
++        return status;
++    }
++
++    public void setStatus(String status) {
++        this.status = status;
++    }
++
++    @Override
++    public void loadFrom(T entity) {
++        super.loadFrom(entity);
++
++        setStatus(entity.getStatus().toString());
++    }
++}
+diff --git a/backend/manager/modules/bll/src/main/java/org/ovirt/engine/core/bll/doctor/documents/PermissionName.java b/backend/manager/modules/bll/src/main/java/org/ovirt/engine/core/bll/doctor/documents/PermissionName.java
+new file mode 100644
+index 0000000..e6019b6
+--- /dev/null
++++ b/backend/manager/modules/bll/src/main/java/org/ovirt/engine/core/bll/doctor/documents/PermissionName.java
+@@ -0,0 +1,21 @@
++package org.ovirt.engine.core.bll.doctor.documents;
++
++import java.lang.annotation.ElementType;
++import java.lang.annotation.Retention;
++import java.lang.annotation.RetentionPolicy;
++import java.lang.annotation.Target;
++
++/**
++ * Annotation to be used with concrete classes extending {@link BaseDocument}.
++ * Specifies the name to be used when querying permission view for given entity type.
++ *
++ * Especially useful when the doctor document name differs from the DB terminology:
++ * e.g. DataCenter vs storage_pool.
++ */
++@Retention(RetentionPolicy.RUNTIME)
++@Target(ElementType.TYPE)
++public @interface PermissionName {
++
++    /** name of this entity used in user permission view */
++    String value() default "";
++}
+diff --git a/backend/manager/modules/bll/src/main/java/org/ovirt/engine/core/bll/doctor/documents/Vm.java b/backend/manager/modules/bll/src/main/java/org/ovirt/engine/core/bll/doctor/documents/Vm.java
+new file mode 100644
+index 0000000..8b74dd6
+--- /dev/null
++++ b/backend/manager/modules/bll/src/main/java/org/ovirt/engine/core/bll/doctor/documents/Vm.java
+@@ -0,0 +1,87 @@
++package org.ovirt.engine.core.bll.doctor.documents;
++
++import static org.ovirt.engine.core.bll.doctor.documents.DocumentUtils.nullSafe;
++
++import org.codehaus.jackson.annotate.JsonProperty;
++import org.ovirt.engine.core.common.businessentities.VM;
++import org.ovirt.engine.core.common.osinfo.OsRepository;
++import org.ovirt.engine.core.common.utils.SimpleDependecyInjector;
++
++public class Vm extends NamedDocumentWithStatus<VM> {
++
++    @JsonProperty("cluster")
++    private String clusterId;
++
++    @JsonProperty("host")
++    private String hostId;
++
++    private int cpuUsage;
++
++    private int memUsage;
++
++    private int memSize;
++
++    private String osType;
++
++    public String getClusterId() {
++        return clusterId;
++    }
++
++    public void setClusterId(String clusterId) {
++        this.clusterId = clusterId;
++    }
++
++    public String getHostId() {
++        return hostId;
++    }
++
++    public void setHostId(String hostId) {
++        this.hostId = hostId;
++    }
++
++    public int getCpuUsage() {
++        return cpuUsage;
++    }
++
++    public void setCpuUsage(int cpuUsage) {
++        this.cpuUsage = cpuUsage;
++    }
++
++    public int getMemUsage() {
++        return memUsage;
++    }
++
++    public void setMemUsage(int memUsage) {
++        this.memUsage = memUsage;
++    }
++
++    public int getMemSize() {
++        return memSize;
++    }
++
++    public void setMemSize(int memSize) {
++        this.memSize = memSize;
++    }
++
++    public String getOsType() {
++        return osType;
++    }
++
++    public void setOsType(String osType) {
++        this.osType = osType;
++    }
++
++    @Override
++    public void loadFrom(VM entity) {
++        super.loadFrom(entity);
++
++        setClusterId(entity.getVdsGroupId().toString());
++        if (entity.getRunOnVds() != null) {
++            setHostId(entity.getRunOnVds().toString());
++        }
++        setCpuUsage(nullSafe(entity.getUsageCpuPercent()));
++        setMemUsage(nullSafe(entity.getUsageMemPercent()));
++        setMemSize(entity.getMemSizeMb());
++        setOsType(SimpleDependecyInjector.getInstance().get(OsRepository.class).getOsName(entity.getVmOsId()));
++    }
++}
+diff --git a/backend/manager/modules/common/src/main/java/org/ovirt/engine/core/common/config/ConfigValues.java b/backend/manager/modules/common/src/main/java/org/ovirt/engine/core/common/config/ConfigValues.java
+index e1ac736..e5e8421 100644
+--- a/backend/manager/modules/common/src/main/java/org/ovirt/engine/core/common/config/ConfigValues.java
++++ b/backend/manager/modules/common/src/main/java/org/ovirt/engine/core/common/config/ConfigValues.java
+@@ -1889,5 +1889,21 @@ public enum ConfigValues {
+     @DefaultValueAttribute("")
+     MigrationPolicies,
+ 
++    @TypeConverterAttribute(Boolean.class)
++    @DefaultValueAttribute("true")
++    DoctorRestEnabled,
++
++    @TypeConverterAttribute(String.class)
++    DoctorRestSecret,
++
++    @TypeConverterAttribute(Integer.class)
++    @DefaultValueAttribute("5")
++    DoctorRestFullUpdateInterval,
++
++    @TypeConverterAttribute(List.class)
++    @OptionBehaviourAttribute(behaviour = OptionBehaviour.CommaSeparatedStringArray)
++    @DefaultValueAttribute("localhost:3000")
++    DoctorRestHosts,
++
+     Invalid
+ }
+diff --git a/packaging/dbscripts/upgrade/pre_upgrade/0000_config.sql b/packaging/dbscripts/upgrade/pre_upgrade/0000_config.sql
+index d7b98d4..f5c0aa7 100644
+--- a/packaging/dbscripts/upgrade/pre_upgrade/0000_config.sql
++++ b/packaging/dbscripts/upgrade/pre_upgrade/0000_config.sql
+@@ -620,6 +620,13 @@ select fn_db_add_config_value('UploadImageXhrRetryIntervalInSeconds','3','genera
+ select fn_db_add_config_value('UploadImageXhrMaxRetries','3','general');
+ 
+ select fn_db_add_config_value_for_versions_up_to('AdPartnerMacSupported','false','3.6');
++
++-- Doctor REST configuration
++select fn_db_add_config_value('DoctorRestEnabled','true','general');
++select fn_db_add_config_value('DoctorRestSecret','','general');
++select fn_db_add_config_value('DoctorRestFullUpdateInterval','5','general');
++select fn_db_add_config_value('DoctorRestHosts','localhost:3000','general');
++
+ ------------------------------------------------------------------------------------
+ --                  Update with override section
+ ------------------------------------------------------------------------------------
+diff --git a/packaging/etc/engine-config/engine-config.properties b/packaging/etc/engine-config/engine-config.properties
+index 5088e92..8809d36 100644
+--- a/packaging/etc/engine-config/engine-config.properties
++++ b/packaging/etc/engine-config/engine-config.properties
+@@ -452,3 +452,11 @@ AutoImportHostedEngine.type=Boolean
+ HostedEngineStorageDomainName.description=The name of the storage domain holding the engine VM disks and configuration.
+ AllowEditingHostedEngine.description=Allow/disallow editing the hosted engine VM.
+ AllowEditingHostedEngine.type=Boolean
++# Doctor REST
++DoctorRestEnabled.description=Enable frontend Doctor REST proxy.
++DoctorRestEnabled.type=Boolean
++DoctorRestSecret.description=Integration token to authenticate backend against Doctor REST service.
++DoctorRestFullUpdateInterval.description=Number of seconds between consecutive full updates of Doctor REST cache.
++DoctorRestFullUpdateInterval.type=Integer
++DoctorRestHosts.description=List of 'host:port' values of Doctor REST services to use for frontend communication.
++DoctorRestHosts.type=StringMultiple
+-- 
+2.5.5
+

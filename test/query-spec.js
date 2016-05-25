@@ -416,7 +416,64 @@ describe('Query Language', () => {
   })
 
   describe('where', () => {
-    // TODO: write tests for filtering
+    it('should filter entities based on a simple property equality', function * () {
+      yield rest.setup({
+        vm: [
+          { id: '1', status: 'up' },
+          { id: '2', status: 'up' },
+          { id: '3', status: 'down' },
+          { id: '4', status: 'up' },
+          { id: '5', status: 'undefined' }
+        ]
+      })
+
+      let res = yield get({url: '/entities/vm', payload: {where: {status: 'up'}}})
+      expect(res.body).to.eql([
+        { id: '1', status: 'up' },
+        { id: '2', status: 'up' },
+        { id: '4', status: 'up' }
+      ])
+    })
+
+    it('should support filtering based on multiple conditions', function * () {
+      yield rest.setup({
+        vm: [
+          { id: '1', status: 'up', cluster: '1' },
+          { id: '2', status: 'up', cluster: '2' },
+          { id: '3', status: 'down', cluster: '2' },
+          { id: '4', status: 'up', cluster: '1' },
+          { id: '5', status: 'undefined', cluster: '1' }
+        ]
+      })
+
+      let res = yield get({url: '/entities/vm', payload: {
+        select: 'id',
+        where: {status: 'up', cluster: '1'}}
+      })
+      expect(res.body).to.eql([
+        { id: '1' },
+        { id: '4' }
+      ])
+    })
+
+    it('should support matching on simple glob patterns', function * () {
+      yield rest.setup({
+        vm: [
+          { id: '1', status: 'up' },
+          { id: '2', status: 'powering_up' },
+          { id: '3', status: 'down' },
+          { id: '4', status: 'up' },
+          { id: '5', status: 'powering_down' }
+        ]
+      })
+
+      let res = yield get({url: '/entities/vm', payload: {where: {status: '*up'}}})
+      expect(res.body).to.eql([
+        { id: '1', status: 'up' },
+        { id: '2', status: 'powering_up' },
+        { id: '4', status: 'up' }
+      ])
+    })
   })
 
   describe('orderBy', () => {
